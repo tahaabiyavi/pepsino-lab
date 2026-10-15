@@ -120,8 +120,18 @@ async function check(file, cookie, assertions, before) {
       ).every((c) => (!c.querySelector('.tag').textContent.includes('قفل')
         || !c.querySelector('[data-exam-act]'))),
       'آمار رندر شده': (d) => d.querySelectorAll('#homeStatGrid .sbox').length >= 4,
-      'برنامه راهبردی رندر شده': (d) => d.querySelectorAll('#homePlanList .night-card').length >= 1,
-      'جدول برنامه پر شده': (d) => d.querySelectorAll('#homePlanTableBody tr').length >= 1,
+      // برنامه برای هر پایه فرق دارد؛ اگر پایه‌ی دانش‌آموز برنامه‌ای نداشته
+      // باشد، جدول باید خالی باشد (و برعکس) — مهم هم‌خوانیِ این دو است.
+      'برنامه راهبردی با پایه هم‌خوان است': (d) => {
+        const tag = (d.getElementById('homePhasesTag').textContent || '').match(/\d+/);
+        const n = tag ? Number(tag[0]) : 0;
+        return d.querySelectorAll('#homePlanList .night-card').length === n;
+      },
+      'جدول برنامه با تعداد مراحل هم‌خوان است': (d) => {
+        const tag = (d.getElementById('homePhasesTag').textContent || '').match(/\d+/);
+        const n = tag ? Number(tag[0]) : 0;
+        return d.querySelectorAll('#homePlanTableBody tr').length === n;
+      },
       'تقویم رندر شده': (d) => d.querySelectorAll('#homeCalBody .cal-cell').length >= 28,
       'آزمون‌ها رندر شده': (d) => d.querySelectorAll('#homeExamGrid .night-card').length >= 1,
       // بخش «راهنمای سریع» بنا به درخواست حذف شده است
@@ -135,7 +145,11 @@ async function check(file, cookie, assertions, before) {
       'خروجیِ چاپ آماده است': (d) => typeof d.defaultView.Print === 'object',
       'برگهٔ چاپ ساخته شده': (d) => !!d.querySelector('#printArea .p-page'),
       'سربرگِ برند در برگهٔ چاپ': (d) => !!d.querySelector('#printArea .p-head .p-logo'),
-      'ردیف‌های جدول برنامه در چاپ': (d) => d.querySelectorAll('#printArea .p-table tbody tr').length >= 1,
+      'جدولِ برنامه در چاپ هم‌خوان است': (d) => {
+        const tag = (d.getElementById('homePhasesTag').textContent || '').match(/\d+/);
+        const n = tag ? Number(tag[0]) : 0;
+        return d.querySelectorAll('#printArea .p-table tbody tr').length === n;
+      },
       'چاپ فراخوانی شده': (d, w) => (w.__printed || 0) >= 1,
     }, (doc) => {
       const btn = doc.getElementById('homePrintPlanBtn');

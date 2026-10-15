@@ -6,3 +6,6 @@ backups/
 *.sqlite-wal
 *.sqlite-shm
 *.log
+
+# فایلِ ورودیِ برنامه راهبردی (داده‌ی شخصی — وارد گیت‌هاب نمی‌شود)
+scripts/plan-import.json
