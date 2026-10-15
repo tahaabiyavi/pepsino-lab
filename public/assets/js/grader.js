@@ -110,9 +110,9 @@ function renderGrading(data, assignmentId) {
           <button class="btn sm ghost" data-zoom="key" data-dir="+">+</button>
           ${keyUrl ? `<a class="btn sm ghost" href="${keyUrl}" target="_blank">تب جدید</a>` : ''}
         </div>
-        <div style="margin-top:8px;overflow:auto;max-height:60vh;border:1px solid var(--line);border-radius:10px;background:#fff">
+        <div style="margin-top:8px;overflow:auto;max-height:78vh;border:1px solid var(--line);border-radius:10px;background:#fff">
           ${keyUrl
-            ? `<iframe id="keyFrame" src="${keyUrl}" style="width:100%;min-height:420px;border:0;transform-origin:top right"></iframe>`
+            ? `<iframe id="keyFrame" src="${keyUrl}" style="width:100%;height:74vh;min-height:520px;border:0;display:block;transform-origin:top right"></iframe>`
             : '<p class="small muted" style="padding:16px">پاسخنامه رسمی موجود نیست</p>'}
         </div>
       </div>
@@ -123,9 +123,9 @@ function renderGrading(data, assignmentId) {
           <button class="btn sm ghost" data-zoom="stu" data-dir="+">+</button>
           ${studentFileUrl ? `<a class="btn sm ghost" href="${studentFileUrl}" target="_blank">تب جدید</a>` : ''}
         </div>
-        <div style="margin-top:8px;overflow:auto;max-height:60vh;border:1px solid var(--line);border-radius:10px;background:#fff">
+        <div style="margin-top:8px;overflow:auto;max-height:78vh;border:1px solid var(--line);border-radius:10px;background:#fff">
           ${studentFileUrl
-            ? `<iframe id="stuFrame" src="${studentFileUrl}" style="width:100%;min-height:420px;border:0;transform-origin:top right"></iframe>`
+            ? `<iframe id="stuFrame" src="${studentFileUrl}" style="width:100%;height:74vh;min-height:520px;border:0;display:block;transform-origin:top right"></iframe>`
             : '<p class="small muted" style="padding:16px">فایل پاسخ دانش‌آموز موجود نیست</p>'}
         </div>
       </div>

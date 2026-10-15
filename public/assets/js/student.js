@@ -112,8 +112,8 @@ async function openExamDetail(examId) {
           <button class="btn sm ghost" id="printQuestionsBtn">🖨 چاپ برگهٔ سؤالات</button>
           <a class="btn sm ghost" href="/api/student/exams/${examId}/questions-file" target="_blank">باز کردن در تب جدید</a>
         </div>
-        <div id="questionsViewer" style="margin-top:12px;overflow:auto;max-height:70vh;border:2px solid var(--line);border-radius:12px;background:#fff">
-          <iframe id="qFrame" src="/api/student/exams/${examId}/questions-file" style="width:100%;min-height:480px;border:0;transform-origin:top right"></iframe>
+        <div id="questionsViewer" style="margin-top:12px;overflow:auto;max-height:82vh;border:2px solid var(--line);border-radius:12px;background:#fff">
+          <iframe id="qFrame" src="/api/student/exams/${examId}/questions-file" style="width:100%;height:80vh;min-height:520px;border:0;display:block;transform-origin:top right"></iframe>
         </div>
       </div>
     ` : '<p class="small muted" style="margin-top:12px">فایل سؤالات پس از شروع آزمون نمایش داده می‌شود.</p>'}

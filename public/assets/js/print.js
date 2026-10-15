@@ -166,14 +166,39 @@ const Print = (() => {
     });
   }
 
+  /**
+   * باز کردنِ مستقیمِ یک فایل برای چاپ.
+   *
+   * چرا این تابع وجود دارد:
+   * مرورگرها هنگام چاپِ یک صفحه‌ی HTML، فقط «بخشِ دیدنیِ» هر iframe را چاپ
+   * می‌کنند و محتوای درون آن را روی چند صفحه پخش نمی‌کنند. برای همین اگر یک
+   * PDFِ چندصفحه‌ای را داخل iframeِ برگه‌ی چاپ بگذاریم، هنگام چاپ یا
+   * «ذخیره به‌عنوان PDF» تنها صفحه‌ی اول بیرون می‌آید. راهِ درست این است که
+   * فایل را مستقیماً در نمایشگرِ PDFِ خودِ مرورگر باز کنیم؛ آن‌جا همه‌ی
+   * صفحه‌ها درست چاپ می‌شوند.
+   *
+   * @returns {boolean} آیا پنجره باز شد
+   */
+  function printFileDirect(url) {
+    const win = window.open(url, '_blank');
+    if (!win) {
+      if (typeof Toast !== 'undefined') {
+        Toast.show('مرورگر پنجره‌ی جدید را بست. اجازه‌ی باز شدنِ pop-up را بده.', 'bad');
+      }
+      return false;
+    }
+    return true;
+  }
+
   /** برگه‌ی سؤالات یک آزمون (فایل PDF/تصویر توکار، یا فهرست سؤالات) */
   function questionPaper(exam, { headerLine } = {}) {
+    // PDF را مستقیم باز می‌کنیم تا همه‌ی صفحه‌ها چاپ شوند (توضیح در printFileDirect)
+    if (exam.questionsFileUrl && !/^image\//.test(exam.questionsFileMime || '')) {
+      return printFileDirect(exam.questionsFileUrl);
+    }
     let body = '';
     if (exam.questionsFileUrl) {
-      const isImage = /^image\//.test(exam.questionsFileMime || '');
-      body += isImage
-        ? `<div class="p-embed"><img src="${esc(exam.questionsFileUrl)}" alt="برگه سؤالات"></div>`
-        : `<div class="p-embed"><iframe src="${esc(exam.questionsFileUrl)}#toolbar=0&view=FitH" title="برگه سؤالات"></iframe></div>`;
+      body += `<div class="p-embed"><img src="${esc(exam.questionsFileUrl)}" alt="برگه سؤالات"></div>`;
     }
     const qs = exam.questions || [];
     if (qs.length) {
@@ -194,12 +219,13 @@ const Print = (() => {
 
   /** پاسخنامهٔ رسمی */
   function answerKey(exam, { headerLine } = {}) {
+    // PDF را مستقیم باز می‌کنیم تا همه‌ی صفحه‌ها چاپ شوند (توضیح در printFileDirect)
+    if (exam.answerKeyUrl && !/^image\//.test(exam.answerKeyMime || '')) {
+      return printFileDirect(exam.answerKeyUrl);
+    }
     let body = '';
     if (exam.answerKeyUrl) {
-      const isImage = /^image\//.test(exam.answerKeyMime || '');
-      body += isImage
-        ? `<div class="p-embed"><img src="${esc(exam.answerKeyUrl)}" alt="پاسخنامه"></div>`
-        : `<div class="p-embed"><iframe src="${esc(exam.answerKeyUrl)}#toolbar=0&view=FitH" title="پاسخنامه"></iframe></div>`;
+      body += `<div class="p-embed"><img src="${esc(exam.answerKeyUrl)}" alt="پاسخنامه"></div>`;
     } else {
       body += '<p class="muted center">پاسخنامه‌ی رسمی برای این آزمون ثبت نشده است.</p>';
     }
@@ -247,6 +273,7 @@ const Print = (() => {
   return {
     sheet, close, table, stats, pageBreak,
     reportCard, reportCards, questionPaper, answerKey, planTable, participants,
+    printFileDirect,
   };
 })();
 

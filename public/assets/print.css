@@ -102,9 +102,11 @@ body.printing .no-print { display: none !important; }
 .p-note { border: 1.5px dashed var(--p-line); border-radius: 12px; padding: 10px 12px; margin-top: 14px; font-size: 13px; }
 
 /* ------------------------------------------------------------------ فایل توکار */
+/* فقط برای تصویر استفاده می‌شود. PDFها هیچ‌وقت اینجا نمی‌آیند:
+   مرورگر هنگام چاپ، محتوای iframe را روی چند صفحه پخش نمی‌کند و تنها
+   صفحه‌ی اول بیرون می‌آید (توضیحِ کامل در printFileDirect در print.js). */
 .p-embed { margin: 10px 0 16px; border: 1.5px solid var(--p-line); border-radius: 12px; overflow: hidden; }
 .p-embed img { display: block; width: 100%; height: auto; }
-.p-embed iframe { display: block; width: 100%; height: 70vh; border: 0; }
 
 /* ------------------------------------------------------------------ پانوشت */
 .p-foot { margin-top: 22px; border-top: 2px solid var(--p-line); padding-top: 12px; display: flex; justify-content: flex-end; }
