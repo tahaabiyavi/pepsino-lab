@@ -74,16 +74,37 @@ document.getElementById('examList').addEventListener('click', (e) => {
   if (b) openExamDetail(Number(b.dataset.detail));
 });
 
-async function openExamDetail(examId) {
+/**
+ * باز کردنِ آزمون با رعایتِ پنجره‌ی زمانی:
+ *   before → قفل است؛ اصلاً باز نمی‌شود
+ *   open   → ورود عادی (امکانِ آپلود)
+ *   after  → شرکت تمرینی (فقط سؤالات، بدون آپلود)
+ */
+function openExamRespectingWindow(examId) {
+  const ex = MY_EXAMS.find((e) => e.id === examId);
+  const st = ex && ex.windowState;
+  if (st === 'before') { Toast.show('این آزمون قفله 🔒', 'bad'); return; }
+  if (st === 'after') { openExamDetail(examId, { practice: true }); return; }
+  openExamDetail(examId);
+}
+
+async function openExamDetail(examId, opts) {
   go('examDetail');
+  // حالت تمرینی: سؤالات دیده می‌شود، بخشِ آپلودِ پاسخ‌نامه اصلاً نمایش داده نمی‌شود
+  const practice = !!(opts && opts.practice);
   const card = document.getElementById('examDetailCard');
   card.innerHTML = '<div class="skeleton" style="height:140px"></div>';
-  const ex = MY_EXAMS.find((e) => e.id === examId);
+  let ex = MY_EXAMS.find((e) => e.id === Number(examId));
+  // اگر فهرستِ آزمون‌ها هنوز بارگذاری نشده (مثلاً مستقیم از صفحه‌ی اصلی آمده‌ایم)، بگیرش
+  if (!ex) {
+    try { await loadExams(); } catch (e) {}
+    ex = MY_EXAMS.find((e) => e.id === Number(examId));
+  }
   if (!ex) { card.innerHTML = 'آزمون یافت نشد'; return; }
 
   const now = new Date();
   const open = ['published', 'in_progress'].includes(ex.status) && now < new Date(ex.submission_deadline) && !ex.my_status;
-  const canUpload = open;
+  const canUpload = open && !practice;
 
   let uploads = [];
   if (canUpload) {
@@ -671,7 +692,10 @@ function renderHome(d) {
   const cta = document.getElementById('homeCtaBtn');
   if (cta) {
     cta.innerHTML = icon('play', { size: 17 }) + (t.home_cta || 'ورود به آزمون');
-    cta.onclick = () => (d.currentExam ? openExamDetail(d.currentExam.id) : go('exams'));
+    cta.onclick = () => {
+      const running = (d.upcomingExams || []).find((e) => e.windowState === 'open');
+      if (running) openExamDetail(running.id); else go('exams');
+    };
   }
 
   renderHomeCurrent(d, t);
@@ -684,79 +708,124 @@ function renderHome(d) {
 }
 
 /* ---------------------------------------------- مرحله‌ی جاری + شمارش معکوس */
-function renderHomeCurrent(d, t) {
-  const ex = d.currentExam;
-  const tagEl = document.getElementById('homeCurrentTag');
-  const labelEl = document.getElementById('homeCountdownLabel');
-  const cdEl = document.getElementById('homeCountdown');
-  const listEl = document.getElementById('homeCurrentList');
-  const enter = document.getElementById('homeEnterBtn');
-  const title = document.getElementById('homeCurrentLabel');
+/* ------------------------------------- کارت وضعیت آزمون‌ها (چند آزمون همزمان) */
+const EXAM_STATE_UI = {
+  before: {
+    badge: '🔒 قفل',
+    tagCls: 'tag b',
+    title: 'این آزمون قفله 🔒',
+    cdLabel: 'تا شروع آزمون',
+    btn: null,
+  },
+  open: {
+    badge: 'در حال برگزاری',
+    tagCls: 'tag g12 solid',
+    title: 'مهلت ارسال پاسخ‌نامه',
+    cdLabel: 'تا پایان مهلت آزمون',
+    btn: { label: 'ورود به آزمون', cls: 'btn dark', act: 'enter' },
+  },
+  after: {
+    badge: 'پایان‌یافته',
+    tagCls: 'tag b',
+    title: 'مدت زمان آزمون به اتمام رسیده ⏳',
+    cdLabel: null,
+    btn: { label: 'شرکت تمرینی در آزمون', cls: 'btn ghost', act: 'practice' },
+  },
+};
 
-  setText('homePhasesTag', (d.phases || []).length + ' مرحله');
-  setText('homeExamsTag', (d.upcomingExams || []).length + ' آزمون پیش‌رو');
-
-  if (!ex) {
-    if (tagEl) tagEl.textContent = 'آزمونی نیست';
-    if (title) title.textContent = 'مرحله‌ی جاری';
-    if (labelEl) labelEl.textContent = 'فعلاً آزمون بازی برای پایه‌ی شما وجود ندارد';
-    if (cdEl) cdEl.innerHTML = '';
-    if (listEl) listEl.innerHTML = '';
-    if (enter) { enter.classList.add('hidden'); }
-    return;
-  }
-  if (enter) { enter.classList.remove('hidden'); enter.onclick = () => openExamDetail(ex.id); }
-
-  const state = ex.windowState;
-  if (tagEl) {
-    tagEl.textContent = state === 'open' ? 'در حال برگزاری' : state === 'before' ? 'به‌زودی' : 'پایان‌یافته';
-    tagEl.className = 'tag ' + (state === 'open' ? 'g12 solid' : 'b');
-  }
-  if (title) title.textContent = ex.title || 'مرحله‌ی جاری';
-  if (labelEl) {
-    labelEl.textContent = state === 'open' ? (t.countdown_label_open || 'تا پایان مهلت ارسال')
-      : state === 'before' ? (t.countdown_label_before || 'تا شروع آزمون')
-        : (t.countdown_label_after || 'مهلت این مرحله تمام شده');
-  }
-
-  if (cdEl) {
-    if (state === 'after') {
-      cdEl.innerHTML = '<div class="small muted" style="grid-column:1/-1;padding:8px 0">مهلت این آزمون گذشته است؛ می‌توانی تمرینی حلش کنی.</div>';
-    } else {
-      cdEl.innerHTML = ['d', 'h', 'm', 's'].map(() => '<div class="unit"><div class="u-num">۰</div></div>').join('');
-      cdEl.innerHTML = `
-        <div class="unit"><div class="u-num" id="cdD">۰</div><div class="u-lbl">روز</div></div>
-        <div class="unit"><div class="u-num" id="cdH">۰۰</div><div class="u-lbl">ساعت</div></div>
-        <div class="unit"><div class="u-num" id="cdM">۰۰</div><div class="u-lbl">دقیقه</div></div>
-        <div class="unit"><div class="u-num" id="cdS">۰۰</div><div class="u-lbl">ثانیه</div></div>`;
-      tickHomeCountdown(ex.countdownTarget);
-    }
-  }
-
-  if (listEl) {
-    listEl.innerHTML = [
-      ['تاریخ', Jalali.long(ex.starts_at)],
-      ['مهلت ارسال', Jalali.long(ex.submission_deadline)],
-      ['مدت', faNum(ex.duration_minutes) + ' دقیقه'],
-    ].map(([k, v]) => '<div class="th-item">' + icon('clock', { size: 15 }) +
-      '<span class="muted small">' + esc(k) + '</span><span class="spacer"></span><b>' + esc(v) + '</b></div>').join('');
-  }
+function cdUnitsHtml(show) {
+  if (!show) return '';
+  return '<div class="count-nums">' +
+    ['d:روز', 'h:ساعت', 'm:دقیقه', 's:ثانیه'].map((x) => {
+      const [k, lbl] = x.split(':');
+      return '<div class="unit"><div class="u-num" data-u="' + k + '">۰</div>' +
+        '<div class="u-lbl">' + lbl + '</div></div>';
+    }).join('') + '</div>';
 }
 
+function examStateCardHtml(ex, i) {
+  const st = ex.windowState || 'before';
+  const ui = EXAM_STATE_UI[st] || EXAM_STATE_UI.before;
+  const hasCd = !!ex.countdownTarget;
+  const btn = ui.btn
+    ? '<button class="' + ui.btn.cls + '" data-exam-act="' + ui.btn.act + '" data-exam-id="' + ex.id + '">' +
+      (ui.btn.act === 'practice' ? icon('practice', { size: 15 }) + ' ' : '') + ui.btn.label + '</button>'
+    : '';
+  return '<div class="card tonight" data-cd-card="' + esc(ex.countdownTarget || '') + '">' +
+    '<div class="th-top"><h3>' + esc(ex.title || 'آزمون') + '</h3>' +
+    '<span class="' + ui.tagCls + '">' + ui.badge + '</span></div>' +
+    '<div class="count-box">' +
+      '<div class="small muted">' + ui.title + '</div>' +
+      (hasCd ? '<div class="small muted" style="margin-top:2px;opacity:.8">' + ui.cdLabel + '</div>' : '') +
+      cdUnitsHtml(hasCd) +
+    '</div>' +
+    '<div class="th-list">' +
+      thItem('شروع', Jalali.long(ex.starts_at)) +
+      thItem('مهلت ارسال', Jalali.long(ex.submission_deadline)) +
+      thItem('مدت', faNum(ex.duration_minutes) + ' دقیقه') +
+    '</div>' + btn +
+  '</div>';
+}
+
+function thItem(k, v) {
+  return '<div class="th-item">' + icon('clock', { size: 15 }) +
+    '<span class="muted small">' + esc(k) + '</span><span class="spacer"></span><b>' + esc(v) + '</b></div>';
+}
+
+function renderHomeCurrent(d, t) {
+  const box = document.getElementById('homeCurrentCards');
+  setText('homePhasesTag', (d.phases || []).length + ' مرحله');
+  setText('homeExamsTag', (d.upcomingExams || []).length + ' آزمون پیش‌رو');
+  if (!box) return;
+
+  const up = d.upcomingExams || [];
+  if (!up.length) {
+    box.innerHTML = '<div class="card tonight"><div class="th-top"><h3>آزمونی نیست</h3>' +
+      '<span class="tag b">—</span></div>' +
+      '<div class="count-box"><div class="small muted">فعلاً آزمون بازی برای پایه‌ی شما وجود ندارد</div></div></div>';
+    return;
+  }
+  // آزمون‌های در حال برگزاری اول، بعد آن‌هایی که هنوز شروع نشده‌اند
+  const order = { open: 0, before: 1, after: 2 };
+  box.innerHTML = up.slice()
+    .sort((a, b) => (order[a.windowState] - order[b.windowState]) ||
+      new Date(a.starts_at) - new Date(b.starts_at))
+    .map(examStateCardHtml).join('');
+
+  box.querySelectorAll('[data-exam-act]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const id = Number(b.dataset.examId);
+      if (b.dataset.examAct === 'practice') openExamDetail(id, { practice: true });
+      else openExamDetail(id);
+    });
+  });
+  startHomeCountdowns();
+}
+
+
 let HOME_CD_TIMER = null;
-function tickHomeCountdown(target) {
+/** شمارش معکوسِ همه‌ی کارت‌های آزمون (هر تعداد که باشند) را همزمان جلو می‌برد. */
+function startHomeCountdowns() {
   if (HOME_CD_TIMER) clearInterval(HOME_CD_TIMER);
-  if (!target) return;
+  const cards = Array.from(document.querySelectorAll('[data-cd-card]'))
+    .filter((c) => c.dataset.cdCard);
+  if (!cards.length) return;
+
   const tick = () => {
-    const c = Countdown.diff(target);
-    const put = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-    put('cdD', faNum(c.d));
-    put('cdH', faNum(String(c.h).padStart(2, '0')));
-    put('cdM', faNum(String(c.m).padStart(2, '0')));
-    put('cdS', faNum(String(c.s).padStart(2, '0')));
-    const box = document.getElementById('homeCountdown');
-    if (box) box.dataset.done = c.done ? '1' : '0';
-    if (c.done) { clearInterval(HOME_CD_TIMER); HOME = null; loadHome(); }
+    let finished = false;
+    cards.forEach((card) => {
+      const c = Countdown.diff(card.dataset.cdCard);
+      const box = card.querySelector('.count-nums');
+      if (!box) return;
+      const put = (u, v) => { const el = box.querySelector('[data-u="' + u + '"]'); if (el) el.textContent = v; };
+      put('d', faNum(c.d));
+      put('h', faNum(String(c.h).padStart(2, '0')));
+      put('m', faNum(String(c.m).padStart(2, '0')));
+      put('s', faNum(String(c.s).padStart(2, '0')));
+      if (c.done) finished = true;
+    });
+    // وقتی یکی از پنجره‌ها بسته/باز شد، صفحه را از نو بساز تا وضعیت عوض شود
+    if (finished) { clearInterval(HOME_CD_TIMER); HOME = null; loadHome(); }
   };
   tick();
   HOME_CD_TIMER = setInterval(tick, 1000);
@@ -911,34 +980,55 @@ function renderHomeExams(d) {
     grid.innerHTML = up.length
       ? up.map(homeExamCardHtml).join('')
       : '<div class="empty-state card soft"><b>آزمون بازی نداری</b>وقتی آزمونی برای پایه‌ی تو منتشر شود، اینجا ظاهر می‌شود.</div>';
+    wireExamCards(grid);
     startWindowCountdowns();
   }
   if (expWrap && expGrid) {
     const gone = d.expiredExams || [];
     expWrap.classList.toggle('hidden', !gone.length);
     expGrid.innerHTML = gone.map(homeExamCardHtml).join('');
+    wireExamCards(expGrid);
   }
 }
 
 function homeExamCardHtml(ex) {
-  const st = ex.windowState;
-  const cls = st === 'open' ? ' is-open' : st === 'after' ? ' is-expired' : '';
-  const badge = st === 'open' ? '<span class="tag g12 solid">در حال برگزاری</span>'
-    : st === 'before' ? '<span class="tag b">به‌زودی</span>'
-      : '<span class="tag b">مهلت تمام شده</span>';
-  const cd = st !== 'after'
+  const st = ex.windowState || 'before';
+  const ui = EXAM_STATE_UI[st] || EXAM_STATE_UI.before;
+  const cls = st === 'open' ? ' is-open' : st === 'after' ? ' is-expired' : ' is-locked';
+
+  const cd = ex.countdownTarget
     ? '<div class="nc-countdown small muted" data-win="' + esc(ex.countdownTarget) + '"></div>'
-    : '<div class="small muted">' + icon('practice', { size: 14 }) + ' می‌توانی تمرینی حلش کنی</div>';
+    : '';
+
+  // پیش از شروع: دکمه‌ی ورودی وجود ندارد (آزمون قفل است)
+  const act = ui.btn
+    ? '<button class="btn sm' + (ui.btn.act === 'practice' ? ' ghost' : '') + '" ' +
+      'data-exam-act="' + ui.btn.act + '" data-exam-id="' + ex.id + '">' +
+      (ui.btn.act === 'practice' ? icon('practice', { size: 15 }) + ' ' : icon('play', { size: 15 })) +
+      ui.btn.label + '</button>'
+    : '';
+
   return '<div class="night-card' + cls + '">' +
     '<div class="nc-head"><span class="nc-num">' + icon('exam', { size: 18 }) + '</span>' +
     '<div><div class="nc-title">' + esc(ex.title) + '</div>' +
     '<div class="nc-meta">' + esc(Jalali.long(ex.starts_at)) + '</div></div></div>' +
-    '<div>' + badge + '</div>' + cd +
+    '<div><span class="' + ui.tagCls + '">' + ui.badge + '</span></div>' +
+    (st === 'after' ? '' : cd) +
+    '<div class="nc-meta">' + ui.title + '</div>' +
     '<div class="nc-meta">مهلت ارسال: ' + esc(Jalali.long(ex.submission_deadline)) + '</div>' +
-    '<div class="nc-actions">' +
-      '<button class="btn sm" data-open-exam="' + ex.id + '">' + icon('play', { size: 15 }) + 'ورود</button>' +
-      (st === 'after' ? '<button class="btn ghost sm" data-go="practice">' + icon('practice', { size: 15 }) + 'حل تمرینی</button>' : '') +
-    '</div></div>';
+    '<div class="nc-actions">' + act + '</div></div>';
+}
+
+/** وصل کردنِ دکمه‌های «ورود به آزمون» / «شرکت تمرینی» روی کارت‌ها. */
+function wireExamCards(root) {
+  if (!root) return;
+  root.querySelectorAll('[data-exam-act]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const id = Number(b.dataset.examId);
+      if (b.dataset.examAct === 'practice') openExamDetail(id, { practice: true });
+      else openExamDetail(id);
+    });
+  });
 }
 
 let WIN_TIMER = null;
@@ -1007,10 +1097,10 @@ function wireHomePrint(d, t) {
 /* رویدادهای کلیِ بخشِ خانه */
 document.addEventListener('click', (e) => {
   const open = e.target.closest('[data-open-exam]');
-  if (open) { openExamDetail(Number(open.dataset.openExam)); return; }
+  if (open) { openExamRespectingWindow(Number(open.dataset.openExam)); return; }
 
   const calExam = e.target.closest('[data-cal-exam]');
-  if (calExam) { openExamDetail(Number(calExam.dataset.calExam)); return; }
+  if (calExam) { openExamRespectingWindow(Number(calExam.dataset.calExam)); return; }
 
   const shift = e.target.closest('[data-cal-shift]');
   if (shift && CAL) {

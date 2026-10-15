@@ -106,8 +106,19 @@ async function check(file, cookie, assertions, before) {
       'نوارِ منو آیکون دارد': (d) => d.querySelectorAll('nav.main .ico').length >= 5,
       'بخش خانه نمایش داده شده': (d) => !d.getElementById('view-home').classList.contains('hidden'),
       'عنوانِ برنامه پر شده': (d) => (d.getElementById('homeTitle').textContent || '').length > 0,
-      'شمارش معکوس رندر شده': (d) => d.querySelectorAll('#homeCountdown .u-num').length === 4
-        || (d.getElementById('homeCountdown').textContent || '').length > 0,
+      // هر آزمونِ پیش‌رو کارتِ وضعیتِ خودش را با شمارش معکوس می‌گیرد (قبلاً فقط یکی بود)
+      'کارت‌های وضعیتِ آزمون ساخته شده': (d) => {
+        const cards = d.querySelectorAll('#homeCurrentCards [data-cd-card]');
+        return cards.length >= 1
+          && Array.from(cards).every((c) => c.querySelector('h3') && c.querySelector('.tag'));
+      },
+      'هر آزمونِ پیش‌رو شمارش معکوس دارد': (d) => Array.from(
+        d.querySelectorAll('#homeCurrentCards [data-cd-card]'),
+      ).every((c) => c.querySelectorAll('.count-nums .u-num').length === 4),
+      'آزمونِ قفل‌شده دکمه‌ی ورود ندارد': (d) => Array.from(
+        d.querySelectorAll('#homeCurrentCards .card'),
+      ).every((c) => (!c.querySelector('.tag').textContent.includes('قفل')
+        || !c.querySelector('[data-exam-act]'))),
       'آمار رندر شده': (d) => d.querySelectorAll('#homeStatGrid .sbox').length >= 4,
       'برنامه راهبردی رندر شده': (d) => d.querySelectorAll('#homePlanList .night-card').length >= 1,
       'جدول برنامه پر شده': (d) => d.querySelectorAll('#homePlanTableBody tr').length >= 1,

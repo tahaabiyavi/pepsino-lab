@@ -73,6 +73,8 @@
 }
 .night-card.is-open { border-color: var(--p11-deep); background: #F1FBF4; }
 .night-card.is-expired { opacity: .82; background: #FAF6EC; }
+.night-card.is-locked { background: #F4F7FC; border-color: #C9D6EA; }
+.night-card.is-locked .nc-title { color: var(--ink-2); }
 .night-card .nc-head { display: flex; align-items: center; gap: 9px; }
 .night-card .nc-num {
   width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center;

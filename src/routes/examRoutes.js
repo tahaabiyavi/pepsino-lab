@@ -9,6 +9,7 @@ const { requireRole } = require('../middleware/security');
 const { AppError, badRequest, forbidden, notFound, conflict } = require('../services/errors');
 const { recordAudit } = require('../services/audit');
 const exams = require('../services/exams');
+const home = require('../services/home');
 const grading = require('../services/grading');
 const { createGraderAccount, setGraderActive, updateStudent, issuePasswordReset } = require('../services/accounts');
 const { tick } = require('../services/publication');
@@ -354,7 +355,16 @@ function mountExamRoutes(app, { db, config, log = console, triggerOutbox = () =>
         WHERE e.status != 'draft'
         ORDER BY e.starts_at DESC`
     ).all(req.auth.id);
-    res.json({ exams: rows.filter((r) => exams.isEligible(db, r.id, req.auth.id)) });
+    const now = new Date();
+    res.json({
+      exams: rows.filter((r) => exams.isEligible(db, r.id, req.auth.id))
+        .map((r) => ({
+          ...r,
+          // قفل (before) / در حال برگزاری (open) / پایان‌یافته (after)
+          windowState: home.windowState(r, now),
+          countdownTarget: home.countdownTarget(r, now).target,
+        })),
+    });
   });
 
   function assertOpenForUpload(examId, studentId, now) {
