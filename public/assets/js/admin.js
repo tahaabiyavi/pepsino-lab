@@ -829,14 +829,15 @@ async function printAdminReportCard(examId, studentId) {
   } catch (e) { Toast.show(e.message || 'چاپ انجام نشد', 'bad'); }
 }
 
-/** چاپِ پاسخنامه‌ی رسمی یک آزمون */
+/** چاپِ پاسخنامه‌ی رسمی یک آزمون (همه‌ی صفحه‌ها) */
 function printAnswerKey(exam) {
+  const url = `/api/admin/exams/${exam.id}/answer-key`;
   Print.answerKey({
     title: exam.title,
     gradeLabel: exam.gradeLabel,
-    answerKeyUrl: `/api/admin/exams/${exam.id}/answer-key`,
+    answerKeyUrl: url,
     answerKeyMime: 'application/pdf',
-  }, { headerLine: '' });
+  }, { headerLine: '' }).catch(() => Print.printFileDirect(url));
 }
 
 /* ===================== آزمون‌های منقضی → تمرین ===================== */

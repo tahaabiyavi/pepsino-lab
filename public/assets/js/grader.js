@@ -76,11 +76,11 @@ async function openAssignment(id) {
   box.innerHTML = '<div class="skeleton" style="height:200px"></div>';
   try {
     const r = await API.get(`/api/grader/assignments/${id}`);
-    renderGrading(r, id);
+    await renderGrading(r, id);
   } catch (e) { box.innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
 }
 
-function renderGrading(data, assignmentId) {
+async function renderGrading(data, assignmentId) {
   const { assignment, answerKey, questions, scores, files } = data;
   const scoreMap = {};
   scores.forEach((s) => { scoreMap[s.questionId] = s; });
@@ -110,10 +110,8 @@ function renderGrading(data, assignmentId) {
           <button class="btn sm ghost" data-zoom="key" data-dir="+">+</button>
           ${keyUrl ? `<a class="btn sm ghost" href="${keyUrl}" target="_blank">تب جدید</a>` : ''}
         </div>
-        <div style="margin-top:8px;overflow:auto;max-height:78vh;border:1px solid var(--line);border-radius:10px;background:#fff">
-          ${keyUrl
-            ? `<iframe id="keyFrame" src="${keyUrl}" style="width:100%;height:74vh;min-height:520px;border:0;display:block;transform-origin:top right"></iframe>`
-            : '<p class="small muted" style="padding:16px">پاسخنامه رسمی موجود نیست</p>'}
+        <div id="keyViewer" style="margin-top:8px">
+          ${keyUrl ? '' : '<p class="small muted" style="padding:16px">پاسخنامه رسمی موجود نیست</p>'}
         </div>
       </div>
       <div class="card soft">
@@ -123,10 +121,8 @@ function renderGrading(data, assignmentId) {
           <button class="btn sm ghost" data-zoom="stu" data-dir="+">+</button>
           ${studentFileUrl ? `<a class="btn sm ghost" href="${studentFileUrl}" target="_blank">تب جدید</a>` : ''}
         </div>
-        <div style="margin-top:8px;overflow:auto;max-height:78vh;border:1px solid var(--line);border-radius:10px;background:#fff">
-          ${studentFileUrl
-            ? `<iframe id="stuFrame" src="${studentFileUrl}" style="width:100%;height:74vh;min-height:520px;border:0;display:block;transform-origin:top right"></iframe>`
-            : '<p class="small muted" style="padding:16px">فایل پاسخ دانش‌آموز موجود نیست</p>'}
+        <div id="stuViewer" style="margin-top:8px">
+          ${studentFileUrl ? '' : '<p class="small muted" style="padding:16px">فایل پاسخ دانش‌آموز موجود نیست</p>'}
         </div>
       </div>
     </div>
@@ -150,15 +146,21 @@ function renderGrading(data, assignmentId) {
     </div>
   `;
 
-  // zoom handlers
-  const zooms = { key: 1, stu: 1 };
+  // نمایشگرهای PDF: صفحه‌ی قبل/بعد و بزرگ‌نمایی دارد؛ دکمه‌های بالا هم به آن وصل‌اند
+  const viewers = { key: null, stu: null };
+  async function mountViewer(which, url, boxId) {
+    const el = document.getElementById(boxId);
+    if (!el || !url || !window.PdfViewer) return;
+    try { viewers[which] = await PdfViewer.open(el, url); } catch (e) { /* می‌ماند برای fallback */ }
+  }
+  await mountViewer('key', keyUrl, 'keyViewer');
+  await mountViewer('stu', studentFileUrl, 'stuViewer');
+
   box.querySelectorAll('[data-zoom]').forEach((b) => {
     b.addEventListener('click', () => {
       const which = b.dataset.zoom;
-      const dir = b.dataset.dir;
-      zooms[which] = dir === '+' ? Math.min(2.5, zooms[which] + 0.25) : Math.max(0.5, zooms[which] - 0.25);
-      const frame = document.getElementById(which === 'key' ? 'keyFrame' : 'stuFrame');
-      if (frame) frame.style.transform = 'scale(' + zooms[which] + ')';
+      const v = viewers[which];
+      if (v && v.zoomBy) v.zoomBy(b.dataset.dir === '+' ? 0.25 : -0.25);
     });
   });
 

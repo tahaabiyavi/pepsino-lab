@@ -331,11 +331,11 @@ select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50
       <button class="navlink" data-nav="home" data-go="home">خانه</button>
       <button class="navlink" data-nav="strategic" data-go="strategic">برنامه راهبردی</button>
       <button class="navlink" data-nav="exams" data-go="exams">آزمون‌ها</button>
-      <button class="navlink" data-nav="results" data-go="results">کارنامه من</button>
+      <button class="navlink" data-nav="results" data-go="results">کارنامه های من</button>
       <button class="navlink" data-nav="leaderboard" data-go="leaderboard">لیدربورد</button>
       <button class="navlink" data-nav="rankings" data-go="rankings">رتبه‌بندی</button>
-      <button class="navlink" data-nav="appeals" data-go="appeals">اعتراض</button>
-      <button class="navlink" data-nav="practice" data-go="practice">تمرین</button>
+      <button class="navlink" data-nav="appeals" data-go="appeals">اعتراض به نمرات</button>
+      <button class="navlink" data-nav="practice" data-go="practice">تمرین ها</button>
       <button class="navlink" data-nav="notifications" data-go="notifications">
         اعلان‌ها <span id="notifDot" class="hidden" style="position:relative"><span class="notif-dot" style="position:static;display:inline-block"></span></span>
       </button>
@@ -360,12 +360,12 @@ select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50
           </div>
           <h1 style="margin-top:14px">
             <span id="homeHead">برنامه راهبردی</span><br>
-            <span class="hl" id="homeTitle">آزمون‌های مرحله‌ای</span>
+            <span class="hl" id="homeTitle">آزمون ها </span>
           </h1>
           <p class="lead" id="homeLead"></p>
           <div class="hero-cta">
             <button class="btn primary" id="homeCtaBtn"></button>
-            <button class="btn ghost" id="homePrintPlanBtn">🖨 چاپ برنامه</button>
+            <button class="btn ghost" id="homePrintPlanBtn">🖨 پرینت برنامه</button>
           </div>
         </div>
 
@@ -397,8 +397,8 @@ select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50
       </div>
       <div id="homePlanList" class="nights"></div>
       <div class="row wrap-r" style="margin-top:14px">
-        <button class="btn ghost" id="homeTableToggle">نمای جدولی (مثل PDF)</button>
-        <button class="btn ghost" id="homePrintPlanTableBtn">🖨 چاپ / PDF برنامه</button>
+        <button class="btn ghost" id="homeTableToggle">نمای جدولی</button>
+        <button class="btn ghost" id="homePrintPlanTableBtn">🖨 فایل برنامه راهبردی </button>
       </div>
       <div id="homeTableView" class="hidden" style="margin-top:14px">
         <div class="table-wrap">
@@ -427,8 +427,8 @@ select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50
       </div>
       <div id="homeExamGrid" class="nights"></div>
       <div id="homeExpiredWrap" class="hidden" style="margin-top:18px">
-        <div class="sec-head"><div><h2>آزمون‌هایی که مهلتشان گذشته</h2>
-          <div class="sub">این آزمون‌ها بسته شده‌اند؛ می‌توانی همان سؤال‌ها را تمرینی حل کنی.</div></div>
+        <div class="sec-head"><div><h2> آزمون های منقضی شده  </h2>
+          <div class="sub">این آزمون‌ها بسته شده‌ان؛ می‌توانی همون سؤال‌ها رو تمرینی حل کنی.</div></div>
           <div class="line"></div>
         </div>
         <div id="homeExpiredGrid" class="nights"></div>
@@ -438,7 +438,7 @@ select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50
     <!-- رتبه‌بندی -->
     <section id="board">
       <div class="sec-head" style="margin-top:26px">
-        <div><h2 id="homeBoardTitle">رتبه‌بندی</h2><div class="sub" id="homeBoardSub"></div></div>
+        <div><h2 id="homeBoardTitle">لیدربورد</h2><div class="sub" id="homeBoardSub"></div></div>
         <div class="line"></div>
       </div>
       <div id="homeBoardBody"></div>
@@ -447,7 +447,7 @@ select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50
     <!-- راهنما -->
     <section id="notes">
       <div class="sec-head" style="margin-top:26px">
-        <div><h2 id="homeGuideTitle">راهنمای سریع</h2><div class="sub">چیزهایی که برای آزمون دادن لازم است بدانی.</div></div>
+        <div><h2 id="homeGuideTitle">راهنمای سریع</h2><div class="sub">بد نیست اگه بدونی...</div></div>
         <div class="line"></div>
       </div>
       <div class="grid-2">
@@ -530,9 +530,9 @@ select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50
 
     <div id="rk-subject" class="stack hidden">
       <div class="grid-3" style="max-width:620px">
-        <div class="field"><label>سال تحصیلی (شناسه)</label><input class="inp" id="subjYearId" type="number" min="1" value="1"></div>
+        <div class="field"><label>سال تحصیلی</label><input class="inp" id="subjYearId" type="number" min="1" value="1"></div>
         <div class="field"><label>پایه</label><select class="inp" id="subjGradeCodeSelect"></select></div>
-        <div class="field"><label>درس (شناسه)</label><input class="inp" id="subjSubjectId" type="number" min="1" placeholder="مثلاً 1"></div>
+        <div class="field"><label>درس</label><input class="inp" id="subjSubjectId" type="number" min="1" placeholder="مثلاً 1"></div>
       </div>
       <button class="btn sm" id="loadSubjectRanking">نمایش رتبه‌بندی درس</button>
       <div class="table-wrap"><table class="board" id="rankSubjectTable">
@@ -570,6 +570,7 @@ select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50
 
 <footer class="site"><div class="wrap center small muted">pepsino LAB — pepsinogen.net</div></footer>
 
+<script src="assets/js/pdfviewer.js"></script>
 <script src="assets/js/api.js"></script>
 <script src="assets/js/icons.js"></script>
 <script src="assets/js/jalali.js"></script>

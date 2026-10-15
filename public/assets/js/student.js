@@ -2,6 +2,7 @@
 let ME = null;
 let META = { grades: [], fields: [] };
 let MY_EXAMS = [];
+let Q_VIEWER = null;   // کنترلرِ نمایشگرِ PDFِ برگهٔ سؤالات
 
 function views() { return document.querySelectorAll('main > section'); }
 function go(name) {
@@ -107,14 +108,10 @@ async function openExamDetail(examId) {
         <div class="row wrap-r">
           <b>سؤالات آزمون</b>
           <span class="spacer"></span>
-          <button class="btn sm ghost" id="zoomOutBtn">−</button>
-          <button class="btn sm ghost" id="zoomInBtn">+</button>
-          <button class="btn sm ghost" id="printQuestionsBtn">🖨 چاپ برگهٔ سؤالات</button>
-          <a class="btn sm ghost" href="/api/student/exams/${examId}/questions-file" target="_blank">باز کردن در تب جدید</a>
+          <button class="btn sm ghost" id="printQuestionsBtn">🖨 پرینت برگهٔ سؤالات</button>
+          <a class="btn sm ghost" href="/api/student/exams/${examId}/questions-file" target="_blank">دانلود فایل</a>
         </div>
-        <div id="questionsViewer" style="margin-top:12px;overflow:auto;max-height:82vh;border:2px solid var(--line);border-radius:12px;background:#fff">
-          <iframe id="qFrame" src="/api/student/exams/${examId}/questions-file" style="width:100%;height:80vh;min-height:520px;border:0;display:block;transform-origin:top right"></iframe>
-        </div>
+        <div id="questionsViewer" style="margin-top:12px"></div>
       </div>
     ` : '<p class="small muted" style="margin-top:12px">فایل سؤالات پس از شروع آزمون نمایش داده می‌شود.</p>'}
 
@@ -146,12 +143,14 @@ async function openExamDetail(examId) {
       cdEl.textContent = formatCountdown(ms) + ' تا پایان این آزمون';
     }, 1000);
   }
-  let zoom = 1;
-  const frame = document.getElementById('qFrame');
-  const zi = document.getElementById('zoomInBtn');
-  const zo = document.getElementById('zoomOutBtn');
-  if (zi) zi.addEventListener('click', () => { zoom = Math.min(2.5, zoom + 0.25); if (frame) frame.style.transform = 'scale(' + zoom + ')'; });
-  if (zo) zo.addEventListener('click', () => { zoom = Math.max(0.5, zoom - 0.25); if (frame) frame.style.transform = 'scale(' + zoom + ')'; });
+  // نمایشگرِ PDF با دکمه‌های صفحه‌ی قبل/بعد و بزرگ‌نمایی
+  const qBox = document.getElementById('questionsViewer');
+  if (qBox && showQuestions && window.PdfViewer) {
+    if (Q_VIEWER) { try { Q_VIEWER.destroy(); } catch (e) {} Q_VIEWER = null; }
+    PdfViewer.open(qBox, `/api/student/exams/${examId}/questions-file`)
+      .then((v) => { Q_VIEWER = v; })
+      .catch(() => {});
+  }
 
   // چاپِ برگهٔ سؤالات (PDF از طریقِ چاپِ مرورگر)
   const pq = document.getElementById('printQuestionsBtn');
@@ -164,7 +163,8 @@ async function openExamDetail(examId) {
         durationMinutes: ex.duration_minutes || ex.durationMinutes,
         questionsFileUrl: `/api/student/exams/${examId}/questions-file`,
         questionsFileMime: 'application/pdf',
-      }, { headerLine: (HOME && HOME.texts && HOME.texts.print_header_line) || '' });
+      }, { headerLine: (HOME && HOME.texts && HOME.texts.print_header_line) || '' })
+        .catch(() => Print.printFileDirect(`/api/student/exams/${examId}/questions-file`));
     });
   }
 

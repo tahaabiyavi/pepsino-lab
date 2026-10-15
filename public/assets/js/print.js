@@ -124,7 +124,6 @@ const Print = (() => {
       </div>
       ${stats([
         ['نمره‌ی کل', `<b>${faNum(rc.totalMark || '0')}</b> از ${faNum(rc.maxTotalMark || '20')}`],
-        ['درصد', faNum(rc.percent != null ? Math.round(rc.percent) : 0) + '٪'],
         ['رتبه در آزمون', rc.rank ? faNum(rc.rank) : '—'],
         ['وضعیت', rc.status === 'absent' ? 'غایب' : 'حاضر'],
       ])}
@@ -190,10 +189,40 @@ const Print = (() => {
     return true;
   }
 
+  /**
+   * همه‌ی صفحه‌های یک PDF را به تصویر تبدیل می‌کند و آن‌ها را به‌صورت
+   * «هر تصویر یک صفحه‌ی چاپی» در برگه می‌چیند.
+   * این کار مشکلِ چاپِ تک‌صفحه‌ای را از ریشه حل می‌کند.
+   * @returns {Promise<string|null>} بدنه‌ی آماده، یا null اگر ممکن نبود
+   */
+  async function pdfPagesBody(url) {
+    if (!url || typeof window === 'undefined' || !window.PdfViewer) return null;
+    try {
+      const imgs = await window.PdfViewer.pagesAsImages(url);
+      if (!imgs.length) return null;
+      return imgs.map((src, i) => `
+        <div class="p-pdf-page">
+          <img src="${src}" alt="صفحه ${faNum(i + 1)}">
+        </div>`).join('');
+    } catch (e) { return null; }
+  }
+
   /** برگه‌ی سؤالات یک آزمون (فایل PDF/تصویر توکار، یا فهرست سؤالات) */
-  function questionPaper(exam, { headerLine } = {}) {
-    // PDF را مستقیم باز می‌کنیم تا همه‌ی صفحه‌ها چاپ شوند (توضیح در printFileDirect)
-    if (exam.questionsFileUrl && !/^image\//.test(exam.questionsFileMime || '')) {
+  async function questionPaper(exam, { headerLine } = {}) {
+    const isPdf = exam.questionsFileUrl && !/^image\//.test(exam.questionsFileMime || '');
+    if (isPdf) {
+      const pages = await pdfPagesBody(exam.questionsFileUrl);
+      if (pages) {
+        return sheet({
+          title: exam.title || 'برگهٔ سؤالات',
+          sub: [exam.gradeLabel, exam.startAt ? Jalali.long(exam.startAt) : '',
+            exam.durationMinutes ? `${faNum(exam.durationMinutes)} دقیقه` : '']
+            .filter(Boolean).map(esc).join(' • '),
+          body: pages, headerLine, landscape: true,
+          note: 'برگهٔ سؤالات؛ در پنجره‌ی چاپ «ذخیره به‌عنوان PDF» را بزن.',
+        });
+      }
+      // اگر pdf.js در دسترس نبود، فایل را مستقیم باز می‌کنیم
       return printFileDirect(exam.questionsFileUrl);
     }
     let body = '';
@@ -218,9 +247,17 @@ const Print = (() => {
   }
 
   /** پاسخنامهٔ رسمی */
-  function answerKey(exam, { headerLine } = {}) {
-    // PDF را مستقیم باز می‌کنیم تا همه‌ی صفحه‌ها چاپ شوند (توضیح در printFileDirect)
-    if (exam.answerKeyUrl && !/^image\//.test(exam.answerKeyMime || '')) {
+  async function answerKey(exam, { headerLine } = {}) {
+    const isPdf = exam.answerKeyUrl && !/^image\//.test(exam.answerKeyMime || '');
+    if (isPdf) {
+      const pages = await pdfPagesBody(exam.answerKeyUrl);
+      if (pages) {
+        return sheet({
+          title: `پاسخنامه — ${exam.title || ''}`,
+          sub: esc(exam.gradeLabel || ''),
+          body: pages, headerLine, landscape: true,
+        });
+      }
       return printFileDirect(exam.answerKeyUrl);
     }
     let body = '';

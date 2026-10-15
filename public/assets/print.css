@@ -102,6 +102,12 @@ body.printing .no-print { display: none !important; }
 .p-note { border: 1.5px dashed var(--p-line); border-radius: 12px; padding: 10px 12px; margin-top: 14px; font-size: 13px; }
 
 /* ------------------------------------------------------------------ فایل توکار */
+/* هر صفحه‌ی PDF به‌صورت یک تصویر و دقیقاً یک صفحه‌ی چاپی.
+   (PDFها هیچ‌وقت داخل iframe چاپ نمی‌شوند — توضیح در printFileDirect در print.js) */
+.p-pdf-page { break-after: page; page-break-after: always; text-align: center; margin: 0; }
+.p-pdf-page:last-child { break-after: auto; page-break-after: auto; }
+.p-pdf-page img { max-width: 100%; max-height: 96%; height: auto; display: block; margin: 0 auto; }
+
 /* فقط برای تصویر استفاده می‌شود. PDFها هیچ‌وقت اینجا نمی‌آیند:
    مرورگر هنگام چاپ، محتوای iframe را روی چند صفحه پخش نمی‌کند و تنها
    صفحه‌ی اول بیرون می‌آید (توضیحِ کامل در printFileDirect در print.js). */

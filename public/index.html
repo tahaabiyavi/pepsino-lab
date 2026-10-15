@@ -321,12 +321,12 @@ select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50
       <span class="plogo brand-logo"></span>
       <span class="brand-txt">
         <span class="brand-name bn-lg"><b class="bn-main">pepsino</b><b class="bn-sub">LAB</b></span>
-        <span>سامانهٔ آزمون و تصحیح</span>
+        <span>GET ACTIVE TO GROW</span>
       </span>
     </a>
     <nav class="main">
       <a href="#about" data-nav="about">دربارهٔ سامانه</a>
-      <a href="#auth" data-nav="auth">ورود / ثبت‌نام</a>
+      <a href="#auth" data-nav="auth"> ورود یا ثبت نام در ایونت </a>
     </nav>
     <button class="icon-btn" id="menuBtn" aria-label="منو">☰</button>
   </div>
@@ -336,8 +336,13 @@ select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50
   <section class="hero">
     <div class="hero-grid">
       <div class="hero-copy">
-        <h1>به <span class="hl">pepsino LAB</span> خوش آمدید</h1>
-        <p class="lead">سامانهٔ برگزاری آزمون، تصحیح برگه و اعلام نتایج pepsinogen.net. ثبت‌نام کنید و پس از تأیید مدیریت، وارد حساب خود شوید.</p>
+        <h1> <span class="hl">ایونت آزمون عمومی پپسینوژن</span></h1>
+        <p class="lead">سامانه برگزاری ایونت آزمون های عمومی شبیه ساز امتحانات نهایی پپسینوژن
+       - 
+       میتونی رایگان توی آزمون ثبت نام کنی آموخته هات رو محک بزنی
+        و با 
+        بهره گیری
+       از تصحیح تخصصی عملکردت رو دقیق ارزیابی کنی</p>
         <div class="hero-badges">
           <span class="tag g10">پایه دهم</span>
           <span class="tag g11">پایه یازدهم</span>
@@ -347,11 +352,11 @@ select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50
 
       <div class="card" id="auth">
         <div class="authtabs">
-          <button type="button" class="on" data-tab="login">ورود</button>
-          <button type="button" data-tab="register">ثبت‌نام دانش‌آموز</button>
+          <button type="button" class="on" data-tab="login"> ورود به ایونت</button>
+          <button type="button" data-tab="register">ثبت نام در ایونت </button>
         </div>
 
-        <form id="loginForm" class="stack" method="post">
+        <form id="loginForm" class="stack" method="post" action="javascript:void(0)">
           <div class="field">
             <label>نام کاربری</label>
             <input class="inp" name="username" autocomplete="username" required>
@@ -361,11 +366,11 @@ select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50
             <input class="inp" type="password" name="password" autocomplete="current-password" required>
           </div>
           <div id="loginErr" class="field err hidden"></div>
-          <button class="btn primary block" type="submit">ورود به حساب</button>
+          <button class="btn primary block" type="submit">ورود به ایونت</button>
           <button class="btn ghost block" type="button" id="forgotBtn">رمز عبور را فراموش کرده‌ام</button>
         </form>
 
-        <form id="regForm" class="stack hidden" method="post">
+        <form id="regForm" class="stack hidden" method="post" action="javascript:void(0)">
           <div class="field">
             <label>نام و نام خانوادگی</label>
             <input class="inp" name="fullName" required minlength="3" maxlength="100">
@@ -403,17 +408,21 @@ select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50
       <div class="line"></div>
     </div>
     <div class="stats">
-      <div class="stat"><b>آزمون آنلاین</b><span>برگزاری و زمان‌بندی دقیق آزمون‌ها</span></div>
-      <div class="stat"><b>تصحیح توزیع‌شده</b><span>تخصیص متوازن برگه‌ها به تصحیح‌کنندگان</span></div>
-      <div class="stat"><b>کارنامه و رتبه</b><span>اعلام نتایج و رتبه‌بندی پس از انتشار</span></div>
-      <div class="stat"><b>اعتراض به نمره</b><span>ثبت و رسیدگی به اعتراض در بازهٔ مجاز</span></div>
+      <div class="stat"><b>مطابق برنامه راهبردی</b><span>برگزاری و زمان‌بندی دقیق آزمون‌ها</span></div>
+      <div class="stat"><b>تصحیح دقیق</b><span>تصحیح توسط مصححین پپسینوژن </span></div>
+      <div class="stat"><b>آزمون آنلاین</b><span>دریافت کارنامه پس از اتمام آزمون</span></div>
+      <div class="stat"><b>سوالات مناسب</b><span>سوالات نزدیک به آزمون های نهایی</span></div>
+
+
+      
+
     </div>
   </section>
 </main>
 
 <footer class="site">
   <div class="wrap row wrap-r">
-    <span class="sig sm"><span class="sig-name">pepsino</span></span>
+    <span class="sig sm"><span class="sig-name">Dr.Haji</span></span>
     <span class="spacer"></span>
     <span class="small">pepsinogen.net</span>
   </div>
