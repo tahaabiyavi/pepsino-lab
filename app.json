@@ -1,0 +1,37 @@
+{
+  "name": "pepsino-lab",
+  "description": "سامانه‌ی برگزاری آزمون‌های تشریحی، تصحیح برگه و اعلام نتایج",
+  "repository": "https://github.com/tahaabiyavi/pepsino-lab",
+  "keywords": ["exam", "education", "node", "express", "sqlite", "persian", "farsi"],
+  "stack": "container",
+  "env": {
+    "NODE_ENV": { "value": "production" },
+    "HOST": { "value": "0.0.0.0" },
+    "PORT": { "value": "3000" },
+    "TRUST_PROXY": { "value": "2" },
+    "DB_PATH": { "value": "/data/pepsino.sqlite" },
+    "DATA_DIR": { "value": "/data" },
+    "ADMIN_USERNAME": { "value": "admin" },
+    "PUBLIC_ORIGIN": {
+      "description": "آدرسِ عمومیِ سایت — حتماً با https:// شروع شود",
+      "required": true
+    },
+    "TELEGRAM_WEBHOOK_SECRET": {
+      "description": "رشته‌ی تصادفی (حداقل ۳۲ کاراکتر) — فقط وقتی تلگرام فعال باشد",
+      "generator": "secret",
+      "required": false
+    },
+    "TELEGRAM_CALLBACK_KEY": {
+      "description": "کلید امضای دکمه‌های تأیید/رد (حداقل ۳۲ کاراکتر)",
+      "generator": "secret",
+      "required": false
+    },
+    "TELEGRAM_BOT_TOKEN": {
+      "description": "اختیاری — توکن ربات تلگرام برای تأیید ثبت‌نام",
+      "required": false
+    }
+  },
+  "formation": {
+    "web": { "quantity": 1, "size": "basic" }
+  }
+}

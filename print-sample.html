@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>نمونهٔ خروجی چاپ — pepsino LAB</title>
+<style>
+/* pepsino LAB — استایلِ برگه‌های چاپی / خروجی PDF
+   این فایل فقط هنگامِ چاپ اثر می‌کند: رابطِ کاربری پنهان می‌شود و یک لایه‌ی
+   کاغذیِ راست‌چین با فونتِ فارسی و سربرگِ برند ظاهر می‌شود.
+   مرورگر این لایه را به‌عنوان PDF ذخیره می‌کند. */
+
+.print-area { display: none; }
+
+body.printing > header.top,
+body.printing > main,
+body.printing > footer.site,
+body.printing > .toast,
+body.printing > .modal { display: none !important; }
+
+body.printing { background: #fff; }
+body.printing .print-area { display: block; }
+body.printing .no-print { display: none !important; }
+
+/* ------------------------------------------------------------------ کاغذ */
+.print-area {
+  --p-ink: #4A2E1E;
+  --p-ink-2: #7B5A44;
+  --p-line: #E3D2B6;
+  color: var(--p-ink);
+  font-family: 'Vazirmatn', sans-serif;
+  direction: rtl;
+  padding: 0;
+}
+
+.p-page {
+  width: 100%;
+  max-width: 780px;
+  margin: 0 auto;
+  background: #fff;
+  padding: 8mm 0;
+  box-sizing: border-box;
+}
+.p-page.mini { padding: 0; }
+
+/* ------------------------------------------------------------------ سربرگ */
+.p-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 2.5px solid var(--p-line);
+  padding-bottom: 12px;
+  margin-bottom: 18px;
+}
+.p-logo {
+  width: 60px; height: 60px; border-radius: 50%; flex: 0 0 auto;
+  background: url('img/logo.png') center/contain no-repeat;
+}
+.p-brand { flex: 1; }
+.p-brand .bn-main { font-family: 'Baloo Brand', 'Vazirmatn', sans-serif; font-size: 24px; font-weight: 800; color: var(--p-ink); }
+.p-brand .bn-sub { font-family: 'Baloo Brand', 'Vazirmatn', sans-serif; font-size: 15px; font-weight: 800; letter-spacing: 3px; color: #1E7A46; }
+.p-slogan { font-size: 12px; color: var(--p-ink-2); letter-spacing: .5px; margin-top: 2px; }
+.p-stamp { font-size: 11.5px; color: var(--p-ink-2); }
+
+.p-title {
+  font-size: 22px; font-weight: 800; margin: 0 0 6px; color: var(--p-ink);
+  font-family: 'Baloo Brand', 'Vazirmatn', sans-serif;
+}
+.p-title.sm { font-size: 18px; }
+.p-sub { font-size: 13px; color: var(--p-ink-2); margin-bottom: 16px; }
+
+/* ------------------------------------------------------------------ آمار */
+.p-stats {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+  margin: 14px 0 18px;
+}
+.p-stat {
+  border: 1.5px solid var(--p-line); border-radius: 12px; padding: 8px 10px;
+  display: flex; flex-direction: column; gap: 4px; background: #FFFDF6;
+}
+.p-stat .k { font-size: 11.5px; color: var(--p-ink-2); }
+.p-stat .v { font-size: 16px; font-weight: 800; }
+
+/* ------------------------------------------------------------------ اطلاعات */
+.p-meta {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px;
+  border: 1.5px dashed var(--p-line); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px;
+  font-size: 13.5px;
+}
+.p-meta span { color: var(--p-ink-2); }
+
+/* ------------------------------------------------------------------ جدول */
+.p-table {
+  width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px;
+  border: 1.5px solid var(--p-line);
+}
+.p-table th, .p-table td {
+  border: 1px solid var(--p-line); padding: 7px 9px; text-align: right; vertical-align: top;
+}
+.p-table th { background: #FFF3D6; font-weight: 800; font-size: 12.5px; }
+.p-table tbody tr:nth-child(even) td { background: #FFFDF6; }
+
+.p-badge { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 800; border: 1.5px dashed; }
+.p-badge.ok { background: #F1FBF4; border-color: #1E7A46; color: #14603A; }
+.p-badge.off { background: #FFE6DE; border-color: #B93A1C; color: #B93A1C; }
+.p-badge.wait { background: #fff; border-color: var(--p-line); color: var(--p-ink-2); }
+
+.p-blank { display: inline-block; min-width: 70px; border-bottom: 1.5px dotted var(--p-line); height: 16px; }
+.p-note { border: 1.5px dashed var(--p-line); border-radius: 12px; padding: 10px 12px; margin-top: 14px; font-size: 13px; }
+
+/* ------------------------------------------------------------------ فایل توکار */
+.p-embed { margin: 10px 0 16px; border: 1.5px solid var(--p-line); border-radius: 12px; overflow: hidden; }
+.p-embed img { display: block; width: 100%; height: auto; }
+.p-embed iframe { display: block; width: 100%; height: 70vh; border: 0; }
+
+/* ------------------------------------------------------------------ پانوشت */
+.p-foot { margin-top: 22px; border-top: 2px solid var(--p-line); padding-top: 12px; display: flex; justify-content: flex-end; }
+.p-foot .sig-name { font-family: 'Great Vibes', cursive; font-size: 38px; color: var(--p-ink); }
+
+.p-break { break-after: page; page-break-after: always; }
+
+/* ------------------------------------------------------------------ نوارِ چاپ */
+.p-toolbar {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  max-width: 780px; margin: 18px auto;
+  border: 2px solid var(--p-line); border-radius: 14px; padding: 12px 14px; background: #FFFDF6;
+}
+
+/* ------------------------------------------------------------------ @media print */
+@media print {
+  @page { size: A4 portrait; margin: 14mm; }
+  @page landscape { size: A4 landscape; }
+
+  html, body { background: #fff !important; }
+  body { margin: 0; padding: 0; }
+
+  body > header.top,
+  body > main,
+  body > footer.site,
+  body > .toast,
+  body > .modal { display: none !important; }
+
+  .print-area { display: block !important; }
+  .print-area .no-print { display: none !important; }
+  .p-page.landscape { max-width: none; }
+
+  /* جلوگیری از شکستنِ ردیف‌های جدول وسطِ صفحه */
+  .p-table tr, .p-stat, .p-meta { break-inside: avoid; }
+  .p-page { break-after: auto; }
+
+  /* رنگ‌ها در چاپ حفظ شوند */
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
+@media print and (orientation: landscape) {
+  .p-page.landscape { max-width: none; }
+}
+
+/* این فایل فقط برای نمایش است: نوارِ ابزار را هم نشان می‌دهیم */
+.p-toolbar { display: none; }
+body { background:#F6F1E4; margin:0; padding:24px 0; font-family:'Vazirmatn',sans-serif; }
+.p-page { box-shadow:0 6px 24px rgba(74,46,30,.14); margin-bottom:26px; padding:12mm 12mm; max-width:820px; }
+@media print { body { background:#fff; padding:0 } .p-page { box-shadow:none; margin:0; padding:0 } }
+</style>
+</head>
+<body>
+
+      <div class="p-toolbar no-print">
+        <button class="btn primary" data-pact="print">🖨 چاپ کن / ذخیره‌ی PDF</button>
+        <button class="btn ghost" data-pact="close">← بازگشت</button>
+        <span class="small muted">در پنجره‌ی چاپ، «ذخیره به‌عنوان PDF» را انتخاب کن.</span>
+      </div>
+      <div class="p-page">
+        
+      <div class="p-head">
+        <div class="p-logo" aria-hidden="true"></div>
+        <div class="p-brand">
+          <b class="bn-inline bn-lg"><span class="bn-main">pepsino</span><span class="bn-sub">LAB</span></b>
+          <div class="p-slogan">pepsino LAB — Get Active to Grow</div>
+        </div>
+        <div class="p-stamp">تاریخ چاپ: پنجشنبه ۲۳ مهر ۱۴۰۵</div>
+      </div>
+        <h1 class="p-title">برنامه راهبردی</h1>
+        <div class="p-sub">هر مرحله یک آزمون تشریحی است.</div>
+        <table class="p-table">
+      <thead><tr><th>مرحله</th><th>بازه</th><th>وضعیت</th><th>مباحث</th></tr></thead>
+      <tbody><tr><td>مرحله اول</td><td>۲۲ مهر تا ۲۳ مهر</td><td><span class="p-badge ok">باز</span></td><td>زیست فصل ۱ و ۲ • شیمی فصل ۱</td></tr><tr><td>مرحله دوم</td><td>۲۵ مهر تا ۲۶ مهر</td><td><span class="p-badge wait">قفل</span></td><td>فیزیک فصل ۱ • ریاضی فصل ۲</td></tr><tr><td>مرحله سوم</td><td>۲۸ مهر تا ۲۹ مهر</td><td><span class="p-badge wait">قفل</span></td><td>زیست فصل ۳ • شیمی فصل ۲</td></tr></tbody>
+    </table>
+        
+      <div class="p-foot">
+        <span class="sig">
+          <svg class="sig-swash" viewBox="0 0 220 26" aria-hidden="true"><path d="M4 19c36 9 104 7 152-3 18-4 40-10 58-19" fill="none" stroke="#E0512F" stroke-width="2.4" stroke-linecap="round" opacity=".8"></path></svg>
+          <span class="sig-name">Dr.haji</span>
+          <svg class="sig-heart" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="#E0512F"></path></svg>
+        </span>
+      </div>
+      </div>
+<div class="p-break"></div>
+
+      <div class="p-toolbar no-print">
+        <button class="btn primary" data-pact="print">🖨 چاپ کن / ذخیره‌ی PDF</button>
+        <button class="btn ghost" data-pact="close">← بازگشت</button>
+        <span class="small muted">در پنجره‌ی چاپ، «ذخیره به‌عنوان PDF» را انتخاب کن.</span>
+      </div>
+      <div class="p-page">
+        
+      <div class="p-head">
+        <div class="p-logo" aria-hidden="true"></div>
+        <div class="p-brand">
+          <b class="bn-inline bn-lg"><span class="bn-main">pepsino</span><span class="bn-sub">LAB</span></b>
+          <div class="p-slogan">pepsino LAB — Get Active to Grow</div>
+        </div>
+        <div class="p-stamp">تاریخ چاپ: پنجشنبه ۲۳ مهر ۱۴۰۵</div>
+      </div>
+        <h1 class="p-title">فهرست شرکت‌کنندگان — آزمون مرحله چهارم (نمونه تصحیح)</h1>
+        
+        <table class="p-table">
+      <thead><tr><th>رتبه</th><th>نام</th><th>پایه</th><th>رشته</th><th>نمره</th><th>وضعیت</th></tr></thead>
+      <tbody><tr><td>۱</td><td>علی رضایی</td><td>پایه دهم</td><td>ریاضی و فیزیک</td><td>۱۷.۵</td><td><span class="p-badge ok">حاضر</span></td></tr><tr><td>۲</td><td>محمد حسینی</td><td>پایه دهم</td><td>ریاضی و فیزیک</td><td>۱۷.۵</td><td><span class="p-badge ok">حاضر</span></td></tr><tr><td>۳</td><td>سارا احمدی</td><td>پایه دهم</td><td>ریاضی و فیزیک</td><td>۱۵</td><td><span class="p-badge ok">حاضر</span></td></tr><tr><td>—</td><td>حسن موسوی</td><td>پایه دهم</td><td>ریاضی و فیزیک</td><td>—</td><td><span class="p-badge off">غایب</span></td></tr><tr><td>—</td><td>زهرا جعفری</td><td>پایه دهم</td><td>ریاضی و فیزیک</td><td>—</td><td><span class="p-badge off">غایب</span></td></tr><tr><td>—</td><td>فاطمه کریمی</td><td>پایه دهم</td><td>ریاضی و فیزیک</td><td>—</td><td><span class="p-badge off">غایب</span></td></tr></tbody>
+    </table>
+        
+      <div class="p-foot">
+        <span class="sig">
+          <svg class="sig-swash" viewBox="0 0 220 26" aria-hidden="true"><path d="M4 19c36 9 104 7 152-3 18-4 40-10 58-19" fill="none" stroke="#E0512F" stroke-width="2.4" stroke-linecap="round" opacity=".8"></path></svg>
+          <span class="sig-name">Dr.haji</span>
+          <svg class="sig-heart" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="#E0512F"></path></svg>
+        </span>
+      </div>
+      </div>
+<div class="p-break"></div>
+
+      <div class="p-toolbar no-print">
+        <button class="btn primary" data-pact="print">🖨 چاپ کن / ذخیره‌ی PDF</button>
+        <button class="btn ghost" data-pact="close">← بازگشت</button>
+        <span class="small muted">کارنامه آماده است؛ «ذخیره به‌عنوان PDF» را بزن.</span>
+      </div>
+      <div class="p-page">
+        
+      <div class="p-head">
+        <div class="p-logo" aria-hidden="true"></div>
+        <div class="p-brand">
+          <b class="bn-inline bn-lg"><span class="bn-main">pepsino</span><span class="bn-sub">LAB</span></b>
+          <div class="p-slogan">pepsino LAB — Get Active to Grow</div>
+        </div>
+        <div class="p-stamp">تاریخ چاپ: پنجشنبه ۲۳ مهر ۱۴۰۵</div>
+      </div>
+        <h1 class="p-title">کارنامهٔ آزمون</h1>
+        <div class="p-sub">آزمون مرحله چهارم (نمونه تصحیح)</div>
+        
+      <div class="p-meta">
+        <div><span>نام:</span> <b>علی رضایی</b></div>
+        <div><span>پایه / رشته:</span> <b>پایه دهم — ریاضی و فیزیک</b></div>
+        <div><span>آزمون:</span> <b>آزمون مرحله چهارم (نمونه تصحیح)</b></div>
+        <div><span>تاریخ انتشار:</span> <b>—</b></div>
+      </div>
+      <div class="p-stats"><div class="p-stat"><span class="k">نمره‌ی کل</span><span class="v"><b>۱۷.۵</b> از ۲۰</span></div><div class="p-stat"><span class="k">درصد</span><span class="v">۰٪</span></div><div class="p-stat"><span class="k">رتبه در آزمون</span><span class="v">۱</span></div><div class="p-stat"><span class="k">وضعیت</span><span class="v">حاضر</span></div></div>
+      
+      
+        
+      <div class="p-foot">
+        <span class="sig">
+          <svg class="sig-swash" viewBox="0 0 220 26" aria-hidden="true"><path d="M4 19c36 9 104 7 152-3 18-4 40-10 58-19" fill="none" stroke="#E0512F" stroke-width="2.4" stroke-linecap="round" opacity=".8"></path></svg>
+          <span class="sig-name">Dr.haji</span>
+          <svg class="sig-heart" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="#E0512F"></path></svg>
+        </span>
+      </div>
+      </div>
+</body>
+</html>

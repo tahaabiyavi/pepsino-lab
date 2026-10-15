@@ -1,0 +1,35 @@
+# ---------------------------------------------------------------------------
+# اجرای سریع روی هر VPS که داکر داشته باشد:
+#
+#   cp .env.example .env      # سپس مقادیر را پر کن (حداقل PUBLIC_ORIGIN)
+#   docker compose up -d
+#
+# پایگاه داده و آپلودها در یک volume پایا می‌مانند.
+# ---------------------------------------------------------------------------
+services:
+  app:
+    build: .
+    image: pepsino-lab:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "3000"
+      DB_PATH: /data/pepsino.sqlite
+      DATA_DIR: /data
+      BACKUP_DIR: /data/backups
+    volumes:
+      - pepsino-data:/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/healthz',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  pepsino-data:

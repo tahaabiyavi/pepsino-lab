@@ -1,0 +1,150 @@
+/* pepsino LAB — استایلِ برگه‌های چاپی / خروجی PDF
+   این فایل فقط هنگامِ چاپ اثر می‌کند: رابطِ کاربری پنهان می‌شود و یک لایه‌ی
+   کاغذیِ راست‌چین با فونتِ فارسی و سربرگِ برند ظاهر می‌شود.
+   مرورگر این لایه را به‌عنوان PDF ذخیره می‌کند. */
+
+.print-area { display: none; }
+
+body.printing > header.top,
+body.printing > main,
+body.printing > footer.site,
+body.printing > .toast,
+body.printing > .modal { display: none !important; }
+
+body.printing { background: #fff; }
+body.printing .print-area { display: block; }
+body.printing .no-print { display: none !important; }
+
+/* ------------------------------------------------------------------ کاغذ */
+.print-area {
+  --p-ink: #4A2E1E;
+  --p-ink-2: #7B5A44;
+  --p-line: #E3D2B6;
+  color: var(--p-ink);
+  font-family: 'Vazirmatn', sans-serif;
+  direction: rtl;
+  padding: 0;
+}
+
+.p-page {
+  width: 100%;
+  max-width: 780px;
+  margin: 0 auto;
+  background: #fff;
+  padding: 8mm 0;
+  box-sizing: border-box;
+}
+.p-page.mini { padding: 0; }
+
+/* ------------------------------------------------------------------ سربرگ */
+.p-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 2.5px solid var(--p-line);
+  padding-bottom: 12px;
+  margin-bottom: 18px;
+}
+.p-logo {
+  width: 60px; height: 60px; border-radius: 50%; flex: 0 0 auto;
+  background: url('img/logo.png') center/contain no-repeat;
+}
+.p-brand { flex: 1; }
+.p-brand .bn-main { font-family: 'Baloo Brand', 'Vazirmatn', sans-serif; font-size: 24px; font-weight: 800; color: var(--p-ink); }
+.p-brand .bn-sub { font-family: 'Baloo Brand', 'Vazirmatn', sans-serif; font-size: 15px; font-weight: 800; letter-spacing: 3px; color: #1E7A46; }
+.p-slogan { font-size: 12px; color: var(--p-ink-2); letter-spacing: .5px; margin-top: 2px; }
+.p-stamp { font-size: 11.5px; color: var(--p-ink-2); }
+
+.p-title {
+  font-size: 22px; font-weight: 800; margin: 0 0 6px; color: var(--p-ink);
+  font-family: 'Baloo Brand', 'Vazirmatn', sans-serif;
+}
+.p-title.sm { font-size: 18px; }
+.p-sub { font-size: 13px; color: var(--p-ink-2); margin-bottom: 16px; }
+
+/* ------------------------------------------------------------------ آمار */
+.p-stats {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+  margin: 14px 0 18px;
+}
+.p-stat {
+  border: 1.5px solid var(--p-line); border-radius: 12px; padding: 8px 10px;
+  display: flex; flex-direction: column; gap: 4px; background: #FFFDF6;
+}
+.p-stat .k { font-size: 11.5px; color: var(--p-ink-2); }
+.p-stat .v { font-size: 16px; font-weight: 800; }
+
+/* ------------------------------------------------------------------ اطلاعات */
+.p-meta {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px;
+  border: 1.5px dashed var(--p-line); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px;
+  font-size: 13.5px;
+}
+.p-meta span { color: var(--p-ink-2); }
+
+/* ------------------------------------------------------------------ جدول */
+.p-table {
+  width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px;
+  border: 1.5px solid var(--p-line);
+}
+.p-table th, .p-table td {
+  border: 1px solid var(--p-line); padding: 7px 9px; text-align: right; vertical-align: top;
+}
+.p-table th { background: #FFF3D6; font-weight: 800; font-size: 12.5px; }
+.p-table tbody tr:nth-child(even) td { background: #FFFDF6; }
+
+.p-badge { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 800; border: 1.5px dashed; }
+.p-badge.ok { background: #F1FBF4; border-color: #1E7A46; color: #14603A; }
+.p-badge.off { background: #FFE6DE; border-color: #B93A1C; color: #B93A1C; }
+.p-badge.wait { background: #fff; border-color: var(--p-line); color: var(--p-ink-2); }
+
+.p-blank { display: inline-block; min-width: 70px; border-bottom: 1.5px dotted var(--p-line); height: 16px; }
+.p-note { border: 1.5px dashed var(--p-line); border-radius: 12px; padding: 10px 12px; margin-top: 14px; font-size: 13px; }
+
+/* ------------------------------------------------------------------ فایل توکار */
+.p-embed { margin: 10px 0 16px; border: 1.5px solid var(--p-line); border-radius: 12px; overflow: hidden; }
+.p-embed img { display: block; width: 100%; height: auto; }
+.p-embed iframe { display: block; width: 100%; height: 70vh; border: 0; }
+
+/* ------------------------------------------------------------------ پانوشت */
+.p-foot { margin-top: 22px; border-top: 2px solid var(--p-line); padding-top: 12px; display: flex; justify-content: flex-end; }
+.p-foot .sig-name { font-family: 'Great Vibes', cursive; font-size: 38px; color: var(--p-ink); }
+
+.p-break { break-after: page; page-break-after: always; }
+
+/* ------------------------------------------------------------------ نوارِ چاپ */
+.p-toolbar {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  max-width: 780px; margin: 18px auto;
+  border: 2px solid var(--p-line); border-radius: 14px; padding: 12px 14px; background: #FFFDF6;
+}
+
+/* ------------------------------------------------------------------ @media print */
+@media print {
+  @page { size: A4 portrait; margin: 14mm; }
+  @page landscape { size: A4 landscape; }
+
+  html, body { background: #fff !important; }
+  body { margin: 0; padding: 0; }
+
+  body > header.top,
+  body > main,
+  body > footer.site,
+  body > .toast,
+  body > .modal { display: none !important; }
+
+  .print-area { display: block !important; }
+  .print-area .no-print { display: none !important; }
+  .p-page.landscape { max-width: none; }
+
+  /* جلوگیری از شکستنِ ردیف‌های جدول وسطِ صفحه */
+  .p-table tr, .p-stat, .p-meta { break-inside: avoid; }
+  .p-page { break-after: auto; }
+
+  /* رنگ‌ها در چاپ حفظ شوند */
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
+@media print and (orientation: landscape) {
+  .p-page.landscape { max-width: none; }
+}

@@ -1,0 +1,141 @@
+/* pepsino LAB — بخش‌های صفحه‌ی اصلیِ پنل دانش‌آموز
+   (معرفی برنامه، کارتِ مرحله‌ی جاری، شمارش معکوس، آمار، تقویم شمسی،
+    گرید آزمون‌ها، رتبه‌بندی با مدال و راهنما)
+   این استایل‌ها مکملِ site.css هستند و فقط برای بخش «خانه» استفاده می‌شوند. */
+
+/* ------------------------------------------------------------------ آیکون */
+.ico { flex: 0 0 auto; vertical-align: middle; }
+.btn .ico, .navlink .ico { margin-inline-end: 6px; }
+
+/* ------------------------------------------------------------------ قهرمان */
+.hero { margin-top: 4px; }
+.hero-grid {
+  display: grid; grid-template-columns: 1.35fr .95fr; gap: 18px; align-items: start;
+}
+@media(max-width:900px){ .hero-grid { grid-template-columns: 1fr; } }
+
+.hero-copy h1 { font-size: 30px; line-height: 1.35; margin: 0; font-weight: 800; }
+.hero-copy .hl { color: var(--p10-deep); }
+.hero-cta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+
+/* ------------------------------------------------- کارتِ مرحله‌ی جاری */
+.card.tonight { padding: 18px 20px; background: #FFFDF6; }
+.th-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.th-top h3 { margin: 0; font-size: 17px; }
+
+.count-box {
+  border: 2px dashed var(--line); border-radius: 14px; padding: 14px 12px;
+  background: #fff; text-align: center;
+}
+.count-nums { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; }
+.count-nums .unit { display: flex; flex-direction: column; gap: 2px; }
+.count-nums .u-num {
+  font-size: 22px; font-weight: 800; color: var(--ink);
+  font-variant-numeric: tabular-nums; letter-spacing: -.5px;
+}
+.count-nums .u-lbl { font-size: 11px; color: var(--ink-3); }
+.count-nums[data-done="1"] .u-num { color: var(--p10-deep); }
+
+.th-list { margin: 12px 0 14px; }
+.th-list .th-item {
+  display: flex; align-items: center; gap: 8px; padding: 7px 0;
+  border-bottom: 1px dashed var(--line-2); font-size: 13.5px;
+}
+.th-list .th-item:last-child { border-bottom: 0; }
+
+/* ------------------------------------------------------------------ آمار */
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 18px; }
+.stats .stat {
+  border: 2px solid var(--line); border-radius: 16px; background: #fff;
+  padding: 14px 12px; text-align: center;
+}
+.stats .stat b { display: block; font-size: 22px; font-weight: 800; }
+.stats .stat span { display: block; font-size: 12px; color: var(--ink-3); margin-top: 4px; }
+
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.stat-grid .sbox {
+  border: 2px solid var(--line); border-radius: 16px; background: #FFFDF6;
+  padding: 14px; display: flex; align-items: center; gap: 10px;
+}
+.stat-grid .sbox .s-ico {
+  width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center;
+  background: var(--p10-soft); color: var(--p10-deep); flex: 0 0 auto;
+}
+.stat-grid .sbox .s-k { font-size: 11.5px; color: var(--ink-3); }
+.stat-grid .sbox .s-v { font-size: 19px; font-weight: 800; }
+
+/* ------------------------------------------------------------------ کارت‌ها */
+.nights { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+
+.night-card {
+  border: 2px solid var(--line); border-radius: 18px; background: #fff;
+  padding: 16px; display: flex; flex-direction: column; gap: 10px; position: relative;
+}
+.night-card.is-open { border-color: var(--p11-deep); background: #F1FBF4; }
+.night-card.is-expired { opacity: .82; background: #FAF6EC; }
+.night-card .nc-head { display: flex; align-items: center; gap: 9px; }
+.night-card .nc-num {
+  width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center;
+  font-weight: 800; background: #FFF3D6; border: 2px solid var(--p12-deep); flex: 0 0 auto;
+}
+.night-card .nc-title { font-weight: 800; font-size: 15.5px; }
+.night-card .nc-meta { font-size: 12.5px; color: var(--ink-2); }
+.night-card .nc-topics { font-size: 13px; line-height: 1.9; }
+.night-card .nc-countdown { font-variant-numeric: tabular-nums; font-weight: 800; }
+.night-card .nc-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; }
+
+/* ------------------------------------------------------------------ تقویم */
+.cal-wrap { border: 2px solid var(--line); border-radius: 18px; overflow: hidden; background: #fff; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-bottom: 2px solid var(--line); }
+.cal-head .cal-month { font-weight: 800; font-size: 16px; }
+.cal-dow { display: grid; grid-template-columns: repeat(7, 1fr); background: #FFF3D6; }
+.cal-dow div { text-align: center; font-size: 12px; font-weight: 800; padding: 7px 0; color: var(--ink-2); }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+.cal-cell {
+  min-height: 74px; border-inline-end: 1px solid var(--line-2); border-block-end: 1px solid var(--line-2);
+  padding: 6px 7px; position: relative; display: flex; flex-direction: column; gap: 3px;
+}
+.cal-cell:nth-child(7n) { border-inline-end: 0; }
+.cal-cell.empty { background: #FCF8EE; }
+.cal-cell .d { font-size: 13px; font-weight: 700; }
+.cal-cell.today { background: #fff; box-shadow: inset 0 0 0 2.5px var(--p10); }
+.cal-cell.exam { background: #F1FBF4; cursor: pointer; }
+.cal-cell.exam:hover { background: #E4F7EA; }
+.cal-cell .badge {
+  display: inline-block; font-size: 10.5px; font-weight: 800; padding: 1px 6px;
+  border-radius: 999px; background: var(--p11-deep); color: #fff;
+}
+.cal-cell .today-tag { position: absolute; top: 4px; inset-inline-end: 5px; font-size: 9.5px; color: var(--p10-deep); font-weight: 800; }
+.cal-legend { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; padding: 10px 14px; font-size: 12px; color: var(--ink-2); }
+.cal-legend i { display: inline-block; width: 14px; height: 14px; border-radius: 4px; vertical-align: middle; margin-inline-end: 5px; }
+
+/* ------------------------------------------------------------------ رتبه‌بندی */
+.top-list { display: flex; flex-direction: column; gap: 8px; }
+.top-row {
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+  border: 2px solid var(--line); border-radius: 14px; background: #fff;
+}
+.top-row.gold { background: #FFFBEA; border-color: #E9C46A; }
+.top-row.me { border-color: var(--p10); background: #FFF3D6; }
+.top-row .top-medal { font-size: 20px; width: 30px; text-align: center; flex: 0 0 auto; }
+.top-row .top-rank { font-weight: 800; width: 30px; text-align: center; flex: 0 0 auto; }
+.top-row .top-name { flex: 1; font-weight: 700; }
+.top-row .top-score { font-weight: 800; font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------------------------------ جدول */
+.table-wrap { overflow-x: auto; border: 2px solid var(--line); border-radius: 16px; background: #fff; }
+table.plan, table.board { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+table.plan th, table.plan td, table.board th, table.board td {
+  padding: 9px 11px; text-align: right; border-block-end: 1px solid var(--line-2);
+}
+table.plan th, table.board th { background: #FFF3D6; font-weight: 800; }
+table.plan tbody tr:nth-child(even) td, table.board tbody tr:nth-child(even) td { background: #FFFDF6; }
+
+.hl { color: var(--p10-deep); }
+.muted { color: var(--ink-2); }
+.small { font-size: 13px; }
+.center { text-align: center; }
+.row { display: flex; align-items: center; gap: 10px; }
+.row.wrap-r { flex-wrap: wrap; }
+.spacer { flex: 1; }
+.hidden { display: none !important; }

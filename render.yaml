@@ -1,0 +1,61 @@
+# ---------------------------------------------------------------------------
+# Render Blueprint — دیپلویِ یک‌کلیک با دیسکِ پایا برای SQLite
+#
+# در Render: New → Blueprint → این مخزن را انتخاب کن.
+# بعد از ساخت، ADMIN password را با یک Shell اجرا کن:
+#     npm run set-admin-password
+# ---------------------------------------------------------------------------
+services:
+  - type: web
+    name: pepsino-lab
+    runtime: node
+    plan: starter          # دیسکِ پایا روی پلنِ رایگان در دسترس نیست
+    region: frankfurt
+    branch: main
+    buildCommand: npm ci --omit=dev
+    startCommand: node src/db/migrate.js && node src/server.js
+    healthCheckPath: /healthz
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 3000
+      - key: TRUST_PROXY
+        value: 2
+
+      # پایگاه داده و فایل‌ها روی دیسکِ پایا (پایین تعریف شده)
+      - key: DB_PATH
+        value: /var/data/pepsino.sqlite
+      - key: DATA_DIR
+        value: /var/data
+      - key: BACKUP_DIR
+        value: /var/data/backups
+
+      # باید خودت مقدار بدهی: آدرسِ عمومیِ سایت (حتماً با https://)
+      - key: PUBLIC_ORIGIN
+        sync: false
+
+      - key: ADMIN_USERNAME
+        value: admin
+
+      # رازها به‌صورت خودکار تولید می‌شوند (فقط وقتی تلگرام پیکربندی شود استفاده می‌شوند)
+      - key: TELEGRAM_WEBHOOK_SECRET
+        generateValue: true
+      - key: TELEGRAM_CALLBACK_KEY
+        generateValue: true
+
+      # اختیاری — برای تأییدِ ثبت‌نام از طریق تلگرام
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_ADMIN_CHAT_ID
+        sync: false
+      - key: TELEGRAM_ADMIN_IDS
+        sync: false
+
+    disk:
+      name: pepsino-data
+      mountPath: /var/data
+      sizeGB: 1
