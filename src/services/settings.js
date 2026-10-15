@@ -24,11 +24,11 @@ const SCHEMA = {
   plan_title: { type: 'string', def: 'برنامه راهبردی ⬇️', max: 200, group: 'home', label: 'عنوان بخش برنامه' },
   plan_sub: { type: 'string', def: '', max: 500, group: 'home', label: 'زیرعنوان بخش برنامه (خالی = بدون زیرعنوان)' },
   cal_title: { type: 'string', def: 'تقویم آزمون‌ها', max: 200, group: 'home', label: 'عنوان بخش تقویم' },
-  cal_sub: { type: 'string', def: 'روزهای آزمون رنگی مشخص شده‌اند.', max: 500, group: 'home', label: 'زیرعنوان بخش تقویم' },
+  cal_sub: { type: 'string', def: '', max: 500, group: 'home', label: 'زیرعنوان بخش تقویم (خالی = بدون زیرعنوان)' },
   exams_title: { type: 'string', def: 'آزمون‌های پیش‌رو', max: 200, group: 'home', label: 'عنوان بخش آزمون‌ها' },
-  exams_sub: { type: 'string', def: 'آزمون‌ها تشریحی‌اند.', max: 500, group: 'home', label: 'زیرعنوان بخش آزمون‌ها' },
+  exams_sub: { type: 'string', def: '', max: 500, group: 'home', label: 'زیرعنوان بخش آزمون‌ها (خالی = بدون زیرعنوان)' },
   board_title: { type: 'string', def: 'رتبه‌بندی', max: 200, group: 'home', label: 'عنوان بخش رتبه‌بندی' },
-  board_sub: { type: 'string', def: 'برترین‌های هر مرحله.', max: 500, group: 'home', label: 'زیرعنوان بخش رتبه‌بندی' },
+  board_sub: { type: 'string', def: '', max: 500, group: 'home', label: 'زیرعنوان بخش رتبه‌بندی (خالی = بدون زیرعنوان)' },
   stats_title: { type: 'string', def: 'آمار من', max: 200, group: 'home', label: 'عنوان بخش آمار' },
 
   // برچسب‌های شمارش معکوس
