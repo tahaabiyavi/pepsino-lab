@@ -72,6 +72,113 @@ function createExam(db, input, { now = new Date(), actor = 'admin' } = {}) {
   })();
 }
 
+/**
+ * ویرایشِ مشخصاتِ آزمون: عنوان، مدت، توضیحات و (اختیاری) پایه‌ها/رشته‌ها/درس‌ها.
+ * زمان‌بندی را تغییر نمی‌دهد — برای آن updateSchedule را صدا بزن.
+ * آزمونِ بایگانی‌شده دیگر قابل ویرایش نیست.
+ */
+function updateExam(db, examId, input, { now = new Date(), actor = 'admin' } = {}) {
+  return db.transaction(() => {
+    const exam = getExam(db, examId);
+    if (exam.status === 'archived') throw conflict('exam_locked', 'آزمون بایگانی‌شده قابل ویرایش نیست');
+
+    const errors = {};
+    let title = exam.title;
+    if (input.title !== undefined) {
+      title = String(input.title).trim();
+      if (title.length < 3 || title.length > 150) errors.title = 'عنوان آزمون باید بین ۳ تا ۱۵۰ کاراکتر باشد';
+    }
+    let duration = exam.duration_minutes;
+    if (input.durationMinutes !== undefined && input.durationMinutes !== null && input.durationMinutes !== '') {
+      duration = Number(input.durationMinutes);
+      if (!Number.isInteger(duration) || duration < 5 || duration > 300) {
+        errors.durationMinutes = 'مدت آزمون باید عددی صحیح بین ۵ تا ۳۰۰ دقیقه باشد';
+      }
+    }
+    if (Object.keys(errors).length) throw badRequest('validation_failed', 'اطلاعات آزمون معتبر نیست', errors);
+
+    const instructions = input.instructions !== undefined
+      ? (input.instructions ? String(input.instructions).slice(0, 5000) : null)
+      : exam.instructions;
+
+    const before = { title: exam.title, duration_minutes: exam.duration_minutes };
+
+    // پایه‌ها / رشته‌ها / درس‌ها — فقط اگر فرستاده شده باشند
+    if (Array.isArray(input.gradeCodes) && input.gradeCodes.length) {
+      const grades = resolveCodes(db, 'grades', input.gradeCodes);
+      db.prepare('DELETE FROM exam_grades WHERE exam_id = ?').run(examId);
+      for (const g of grades) db.prepare('INSERT INTO exam_grades (exam_id, grade_id) VALUES (?, ?)').run(examId, g.id);
+    }
+    if (Array.isArray(input.fieldCodes)) {
+      const fields = input.fieldCodes.length ? resolveCodes(db, 'academic_fields', input.fieldCodes) : [];
+      db.prepare('DELETE FROM exam_fields WHERE exam_id = ?').run(examId);
+      for (const f of fields) db.prepare('INSERT INTO exam_fields (exam_id, field_id) VALUES (?, ?)').run(examId, f.id);
+    }
+    if (Array.isArray(input.subjectIds)) {
+      db.prepare('DELETE FROM exam_subjects WHERE exam_id = ?').run(examId);
+      for (const sid of input.subjectIds) {
+        const s = db.prepare('SELECT id FROM subjects WHERE id = ? AND active = 1').get(sid);
+        if (!s) throw badRequest('validation_failed', 'درس نامعتبر است', { subjectIds: 'invalid' });
+        db.prepare('INSERT OR IGNORE INTO exam_subjects (exam_id, subject_id) VALUES (?, ?)').run(examId, s.id);
+      }
+    }
+
+    db.prepare(
+      `UPDATE exams SET title = ?, duration_minutes = ?, instructions = ?, updated_at = ?, version = version + 1
+        WHERE id = ?`,
+    ).run(title, duration, instructions, now.toISOString(), examId);
+
+    db.prepare(
+      'INSERT INTO exam_change_log (exam_id, change_type, details, actor, created_at) VALUES (?, ?, ?, ?, ?)',
+    ).run(examId, 'exam_edited', JSON.stringify({
+      before, after: { title, duration_minutes: duration },
+    }), actor, now.toISOString());
+
+    recordAudit(db, {
+      actor, action: 'exam.updated', entityType: 'exam', entityId: examId,
+      details: { title, duration_minutes: duration },
+    }, now);
+
+    return getExam(db, examId);
+  })();
+}
+
+/**
+ * حذفِ کاملِ یک آزمون به‌همراهِ فایل‌های روی دیسک.
+ * بیشترِ جداول با ON DELETE CASCADE پاک می‌شوند؛ practice_sets و
+ * strategic_phases فقط لینکشان را از دست می‌دهند (SET NULL) و باقی می‌مانند.
+ */
+function deleteExam(db, examId, { actor = 'admin', dataDir = null } = {}) {
+  return db.transaction(() => {
+    const exam = getExam(db, examId);
+
+    // جمع‌آوریِ فایل‌های روی دیسک پیش از حذفِ ردیف‌ها
+    const storageNames = [];
+    const collect = (sql, ...params) => {
+      for (const r of db.prepare(sql).all(...params)) if (r.storage_name) storageNames.push(r.storage_name);
+    };
+    collect('SELECT storage_name FROM exam_question_files WHERE exam_id = ?', examId);
+    collect('SELECT storage_name FROM answer_keys WHERE exam_id = ?', examId);
+    collect(
+      `SELECT storage_name FROM submission_files
+        WHERE submission_id IN (SELECT id FROM submissions WHERE exam_id = ?)`, examId);
+
+    const counts = {
+      questions: db.prepare('SELECT COUNT(*) n FROM questions WHERE exam_id = ?').get(examId).n,
+      submissions: db.prepare('SELECT COUNT(*) n FROM submissions WHERE exam_id = ?').get(examId).n,
+    };
+
+    db.prepare('DELETE FROM exams WHERE id = ?').run(examId);
+
+    recordAudit(db, {
+      actor, action: 'exam.deleted', entityType: 'exam', entityId: examId,
+      details: { title: exam.title, ...counts, files: storageNames.length },
+    }, new Date());
+
+    return { id: examId, title: exam.title, ...counts, storageNames };
+  })();
+}
+
 function resolveCodes(db, table, codes) {
   const out = [];
   for (const code of codes) {
@@ -284,5 +391,5 @@ function isEligible(db, examId, studentId) {
 
 module.exports = {
   TRANSITIONS, createExam, addQuestion, publicationProblems, transition, updateSchedule,
-  recordSubmission, isEligible, getExam, touchExam,
+  recordSubmission, isEligible, getExam, touchExam, updateExam, deleteExam,
 };

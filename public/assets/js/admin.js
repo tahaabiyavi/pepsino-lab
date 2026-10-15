@@ -248,6 +248,9 @@ function renderExamDetail(data, examId) {
     <div class="row wrap-r">
       <h3>${esc(exam.title)}</h3><span class="tag">${esc(faStatus(exam.status))}</span>
       <span class="spacer"></span>
+      ${exam.status !== 'archived' ? `
+        <button class="btn sm ghost" id="editExamBtn">✏️ ویرایش عنوان و مدت</button>
+        <button class="btn sm danger" id="deleteExamBtn">🗑 حذف آزمون</button>` : ''}
       <button class="btn sm ghost" id="backToExams">← بستن</button>
     </div>
 
@@ -265,6 +268,7 @@ function renderExamDetail(data, examId) {
         <div class="field small"><label>مهلت ارسال</label><span>${fmtDateTime(exam.submission_deadline)}</span></div>
         <div class="field small"><label>انتشار پاسخنامه</label><span>${fmtDateTime(exam.answer_key_publish_at)}</span></div>
         <div class="field small"><label>انتشار نتایج</label><span>${fmtDateTime(exam.results_publish_at)}</span></div>
+        <div class="field small"><label>مدت آزمون</label><span>${faNum(exam.duration_minutes)} دقیقه</span></div>
         <button class="btn sm ghost" id="editScheduleBtn">ویرایش زمان‌بندی</button>
       </div>
       <div class="panel soft">
@@ -358,6 +362,63 @@ function renderExamDetail(data, examId) {
       },
     });
     if (out) { Toast.show('بروزرسانی شد', 'good'); openExamDetail(examId); }
+  });
+
+  // ---- ویرایشِ عنوان و مدت آزمون ----
+  const editExamBtn = document.getElementById('editExamBtn');
+  if (editExamBtn) editExamBtn.addEventListener('click', async () => {
+    const out = await formModal({
+      title: 'ویرایش مشخصات آزمون',
+      okText: 'ذخیره تغییرات',
+      fieldsHtml: `
+        <div class="field"><label>عنوان آزمون</label>
+          <input class="inp" type="text" name="title" value="${esc(exam.title)}" minlength="3" maxlength="150" required></div>
+        <div class="field"><label>مدت آزمون (دقیقه)</label>
+          <input class="inp" type="number" name="durationMinutes" value="${exam.duration_minutes}" min="5" max="300" step="1" required>
+          <span class="hint">بین ۵ تا ۳۰۰ دقیقه</span></div>
+        <div class="field"><label>توضیحات (اختیاری)</label>
+          <textarea class="inp" name="instructions" rows="4" maxlength="5000">${esc(exam.instructions || '')}</textarea></div>`,
+      onSubmit: async (obj) => {
+        await API.patch(`/api/admin/exams/${examId}`, {
+          title: obj.title.trim(),
+          durationMinutes: Number(obj.durationMinutes),
+          instructions: obj.instructions,
+        });
+      },
+    });
+    if (out) { Toast.show('آزمون ویرایش شد', 'good'); openExamDetail(examId); loadExams(); }
+  });
+
+  // ---- حذفِ آزمون (با تأییدِ دو مرحله‌ای) ----
+  const deleteExamBtn = document.getElementById('deleteExamBtn');
+  if (deleteExamBtn) deleteExamBtn.addEventListener('click', async () => {
+    const stats = await API.get(`/api/admin/exams/${examId}`);
+    const nQ = (stats.questions || []).length;
+    const out = await formModal({
+      title: 'حذف آزمون',
+      okText: 'حذف قطعی',
+      fieldsHtml: `
+        <p class="hint" style="margin:0 0 12px">
+          آزمون «<b>${esc(exam.title)}</b>» برای همیشه حذف می‌شود.</p>
+        <ul class="small" style="margin:0 18px 14px;line-height:2">
+          <li>${faNum(nQ)} سؤال</li>
+          <li>پاسخ‌برگ‌ها، نمره‌ها و فایل‌های آپلود‌شده</li>
+          <li>تکالیفِ تصحیح و مجموعه‌های تمرینیِ ساخته‌شده از این آزمون</li>
+        </ul>
+        <p class="small muted" style="margin:0 0 8px">این کار <b>قابل بازگشت نیست</b>.</p>
+        <div class="field"><label>برای تأیید، عبارت «حذف» را تایپ کنید</label>
+          <input class="inp" type="text" name="confirm" placeholder="حذف" autocomplete="off"></div>`,
+      onSubmit: async (obj) => {
+        if (String(obj.confirm || '').trim() !== 'حذف') throw new Error('برای تأیید باید عبارت «حذف» را تایپ کنید');
+        await API.del(`/api/admin/exams/${examId}`);
+      },
+    });
+    if (out) {
+      Toast.show('آزمون حذف شد', 'good');
+      document.getElementById('examDetailPanel').classList.add('hidden');
+      loadExams();
+      if (document.getElementById('panel-exams')) document.getElementById('panel-exams').classList.remove('hidden');
+    }
   });
 
   const qfBtn = document.getElementById('qfUploadBtn');

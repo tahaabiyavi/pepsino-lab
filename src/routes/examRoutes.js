@@ -96,6 +96,23 @@ function mountExamRoutes(app, { db, config, log = console, triggerOutbox = () =>
     res.json(exams.updateSchedule(db, id, req.body || {}, { actor: 'admin' }));
   }));
 
+  // ویرایشِ مشخصاتِ آزمون: عنوان، مدت، توضیحات (زمان‌بندی دست‌نخورده باقی می‌ماند)
+  app.patch('/api/admin/exams/:id', adminOnly, safeRoute((req, res) => {
+    const id = idParam(req.params.id);
+    res.json(exams.updateExam(db, id, req.body || {}, { actor: 'admin' }));
+  }));
+
+  // حذفِ کاملِ آزمون به‌همراهِ فایل‌ها
+  app.delete('/api/admin/exams/:id', adminOnly, safeRoute((req, res) => {
+    const id = idParam(req.params.id);
+    const out = exams.deleteExam(db, id, { actor: 'admin', dataDir: config.dataDir });
+    // پس از تعهدِ تراکنش، فایل‌های روی دیسک را هم پاک کن
+    for (const name of out.storageNames) {
+      try { storage.removePrivate(config.dataDir, name); } catch (e) { /* فایل از قبل نبود */ }
+    }
+    res.json({ id: out.id, title: out.title, questions: out.questions, submissions: out.submissions });
+  }));
+
   app.post('/api/admin/exams/:id/transition', adminOnly, safeRoute((req, res) => {
     const id = idParam(req.params.id);
     const to = req.body && req.body.to;

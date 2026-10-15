@@ -369,4 +369,150 @@ test('password help: generic response for unknown and known usernames', async ()
   } finally { await s.close(); }
 });
 
+
+/* ===================== ویرایش و حذف آزمون ===================== */
+
+
+/** یک درسِ نمونه در پایگاهِ تست می‌سازد (پایگاهِ تست خالی است) و id آن را برمی‌گرداند. */
+function seedSubject(db) {
+  const found = db.prepare('SELECT id FROM subjects LIMIT 1').get();
+  if (found) return found.id;
+  const info = db.prepare("INSERT INTO subjects (code, label, active) VALUES ('bio', 'زیست‌شناسی', 1)").run();
+  return Number(info.lastInsertRowid);
+}
+
+/** یک آزمونِ ساده در وضعیتِ draft می‌سازد و id آن را برمی‌گرداند. */
+function makeDraftExam(db, title = 'آزمون قابل ویرایش') {
+  db.prepare("INSERT OR IGNORE INTO academic_years (label, starts_on, ends_on, created_at) VALUES ('1405-1406','2026-09-01','2027-06-30',?)").run(new Date().toISOString());
+  const yearId = db.prepare("SELECT id FROM academic_years WHERE label = '1405-1406'").get().id;
+  const t0 = Date.now();
+  const out = exams.createExam(db, {
+    title,
+    durationMinutes: 60,
+    gradeCodes: ['g10'],
+    academicYearId: yearId,
+    startsAt: new Date(t0 + 24 * 3600e3).toISOString(),
+    submissionDeadline: new Date(t0 + 26 * 3600e3).toISOString(),
+    answerKeyPublishAt: new Date(t0 + 48 * 3600e3).toISOString(),
+    resultsPublishAt: new Date(t0 + 72 * 3600e3).toISOString(),
+  }, { actor: 'test' });
+  return out.id;
+}
+
+test('admin can edit an exam title and duration', async () => {
+  const s = await start();
+  try {
+    const admin = (await login(s, 'admin', 'AdminPass123')).cookie;
+    const id = makeDraftExam(s.db);
+
+    const r = await req(s, 'PATCH', `/api/admin/exams/${id}`, {
+      cookie: admin, json: { title: 'عنوانِ تازه', durationMinutes: 120 },
+    });
+    assert.equal(r.status, 200);
+    assert.equal(r.data.title, 'عنوانِ تازه');
+    assert.equal(r.data.duration_minutes, 120);
+
+    // در پایگاه داده هم واقعاً عوض شده باشد
+    const row = s.db.prepare('SELECT title, duration_minutes FROM exams WHERE id = ?').get(id);
+    assert.equal(row.title, 'عنوانِ تازه');
+    assert.equal(row.duration_minutes, 120);
+
+    // زمان‌بندی باید دست‌نخورده بماند
+    const before = s.db.prepare('SELECT starts_at FROM exams WHERE id = ?').get(id).starts_at;
+    await req(s, 'PATCH', `/api/admin/exams/${id}`, { cookie: admin, json: { title: 'فقط عنوان' } });
+    assert.equal(s.db.prepare('SELECT starts_at FROM exams WHERE id = ?').get(id).starts_at, before);
+  } finally { await s.close(); }
+});
+
+test('exam edit rejects invalid title and duration', async () => {
+  const s = await start();
+  try {
+    const admin = (await login(s, 'admin', 'AdminPass123')).cookie;
+    const id = makeDraftExam(s.db);
+
+    const short = await req(s, 'PATCH', `/api/admin/exams/${id}`, { cookie: admin, json: { title: 'ab' } });
+    assert.equal(short.status, 400);
+    assert.equal(short.data.error.code, 'validation_failed');
+
+    for (const bad of [4, 301, 0, -10, 12.5]) {
+      const r = await req(s, 'PATCH', `/api/admin/exams/${id}`, { cookie: admin, json: { durationMinutes: bad } });
+      assert.equal(r.status, 400, `مدت ${bad} باید رد می‌شد`);
+    }
+    // مقدارِ نامعتبر نباید ذخیره شود
+    assert.equal(s.db.prepare('SELECT duration_minutes FROM exams WHERE id = ?').get(id).duration_minutes, 60);
+  } finally { await s.close(); }
+});
+
+test('exam edit requires admin; students cannot edit', async () => {
+  const s = await start();
+  try {
+    addStudent(s.db, 'stu_editor');
+    const stu = (await login(s, 'stu_editor', 'StudentPass1')).cookie;
+    const id = makeDraftExam(s.db);
+
+    assert.equal((await req(s, 'PATCH', `/api/admin/exams/${id}`, { cookie: stu, json: { title: 'دستکاری' } })).status, 403);
+    assert.equal((await req(s, 'DELETE', `/api/admin/exams/${id}`, { cookie: stu })).status, 403);
+    assert.equal((await req(s, 'PATCH', `/api/admin/exams/${id}`, { json: { title: 'بدون ورود' } })).status, 401);
+    assert.equal(s.db.prepare('SELECT title FROM exams WHERE id = ?').get(id).title, 'آزمون قابل ویرایش');
+  } finally { await s.close(); }
+});
+
+test('admin can delete an exam and its dependent rows', async () => {
+  const s = await start();
+  try {
+    const admin = (await login(s, 'admin', 'AdminPass123')).cookie;
+    const id = makeDraftExam(s.db);
+    const subjId = seedSubject(s.db);
+    s.db.prepare('INSERT INTO questions (exam_id, position, subject_id, body, max_quarters) VALUES (?, 1, ?, ?, 8)')
+      .run(id, subjId, 'سؤال نمونه');
+    assert.ok(s.db.prepare('SELECT id FROM questions WHERE exam_id = ?').get(id).id);
+
+    const r = await req(s, 'DELETE', `/api/admin/exams/${id}`, { cookie: admin });
+    assert.equal(r.status, 200);
+    assert.equal(r.data.id, id);
+
+    // خود آزمون و سؤالاتش رفته باشند
+    assert.equal(s.db.prepare('SELECT COUNT(*) n FROM exams WHERE id = ?').get(id).n, 0);
+    assert.equal(s.db.prepare('SELECT COUNT(*) n FROM questions WHERE exam_id = ?').get(id).n, 0);
+    // دیگر قابل دسترسی نباشد
+    assert.equal((await req(s, 'GET', `/api/admin/exams/${id}`, { cookie: admin })).status, 404);
+  } finally { await s.close(); }
+});
+
+test('deleting an exam detaches (not destroys) practice sets and strategic phases', async () => {
+  const s = await start();
+  try {
+    const admin = (await login(s, 'admin', 'AdminPass123')).cookie;
+    const id = makeDraftExam(s.db);
+
+    const gradeId = s.db.prepare("SELECT id FROM grades WHERE code = 'g10'").get().id;
+    const subjId = seedSubject(s.db);
+    const now = new Date().toISOString();
+    s.db.prepare(`INSERT INTO practice_sets (title, grade_id, subject_id, active, created_at, created_by, source_exam_id)
+                  VALUES ('تمرین نمونه', ?, ?, 1, ?, 'test', ?)`).run(gradeId, subjId, now, id);
+    s.db.prepare(`INSERT INTO strategic_phases (title, grade_id, starts_at, ends_at, sort_order, active, exam_id, created_at, updated_at)
+                  VALUES ('مرحله نمونه', ?, ?, ?, 1, 1, ?, ?, ?)`)
+      .run(gradeId, new Date(Date.now() + 3600e3).toISOString(), new Date(Date.now() + 7200e3).toISOString(), id, now, now);
+
+    assert.equal((await req(s, 'DELETE', `/api/admin/exams/${id}`, { cookie: admin })).status, 200);
+
+    // هر دو باقی می‌مانند و فقط لینکشان خالی می‌شود
+    assert.equal(s.db.prepare('SELECT COUNT(*) n FROM practice_sets').get().n, 1);
+    assert.equal(s.db.prepare('SELECT COUNT(*) n FROM strategic_phases').get().n, 1);
+    assert.equal(s.db.prepare('SELECT source_exam_id FROM practice_sets').get().source_exam_id, null);
+    assert.equal(s.db.prepare('SELECT exam_id FROM strategic_phases').get().exam_id, null);
+  } finally { await s.close(); }
+});
+
+test('archived exams cannot be edited', async () => {
+  const s = await start();
+  try {
+    const admin = (await login(s, 'admin', 'AdminPass123')).cookie;
+    const id = makeDraftExam(s.db);
+    s.db.prepare("UPDATE exams SET status = 'archived' WHERE id = ?").run(id);
+    const r = await req(s, 'PATCH', `/api/admin/exams/${id}`, { cookie: admin, json: { title: 'تغییر ممنوع' } });
+    assert.equal(r.status, 409);
+  } finally { await s.close(); }
+});
+
 void WEBHOOK_SECRET; void SIGNING_KEY; void ADMIN_TG;
