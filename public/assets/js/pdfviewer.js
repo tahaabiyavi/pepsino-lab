@@ -26,6 +26,7 @@ window.PdfViewer = (function () {
 .pv-btn:hover:not(:disabled) { background:#FFF2D9; }
 .pv-btn:disabled { opacity:.45; cursor:not-allowed; }
 .pv-count { font-size:13.5px; color:var(--ink-2,#7B5A44); font-weight:700; white-space:nowrap; }
+.pv-img { display:block; margin:0 auto; height:auto; max-width:none; }
 .pv-stage { overflow:auto; max-height:78vh; border:2px solid var(--line,#EBD9BC);
   border-radius:12px; background:#fff; padding:12px; display:flex; justify-content:center; }
 .pv-stage canvas { display:block; border-radius:6px; box-shadow:0 2px 10px rgba(74,46,30,.12); }
@@ -79,9 +80,95 @@ window.PdfViewer = (function () {
    * نمایشگر را درون یک المان باز می‌کند.
    * @returns کنترلر { page, pageCount, next, prev, goto, zoomBy, setZoom, destroy }
    */
+  /**
+   * تشخیص می‌دهد فایلِ پشتِ این نشانی تصویر است یا نه.
+   * دانش‌آموزها پاسخ‌برگ را معمولاً با گوشی عکس می‌گیرند (JPG/PNG) و
+   * pdf.js نمی‌تواند تصویر را باز کند — برای همین پیش از هر چیز نوع را
+   * می‌فهمیم تا به‌جای یک جعبه‌ی خالی، خودِ عکس نمایش داده شود.
+   */
+  async function isImageUrl(url) {
+    if (/\.(jpe?g|png|gif|webp|bmp|heic|heif)(\?|#|$)/i.test(url)) return true;
+    try {
+      const r = await fetch(url, { method: 'HEAD', credentials: 'same-origin' });
+      const ct = (r.headers && r.headers.get('content-type')) || '';
+      if (/^image\//i.test(ct)) return true;
+      if (/^application\/pdf/i.test(ct) || /%PDF/i.test(ct)) return false;
+    } catch (e) { /* در صورت شکست، مسیرِ pdf را امتحان می‌کنیم */ }
+    return false;
+  }
+
+  /**
+   * نمایشگرِ تصویر — همان رابطِ کنترلرِ نمایشگرِ PDF را برمی‌گرداند تا
+   * کدهایِ فراخوان (پنل دانش‌آموز، مصحح، چاپ) نیازی به تغییر نداشته باشند.
+   */
+  function openImage(box, url, { onState } = {}) {
+    const bar = document.createElement('div');
+    bar.className = 'pv-bar';
+    bar.innerHTML = `
+      <span class="pv-count" data-pv="count">تصویر</span>
+      <span class="pv-spacer"></span>
+      <button type="button" class="pv-btn" data-pv="out" title="کوچک‌تر">−</button>
+      <span class="pv-count" data-pv="zoom"></span>
+      <button type="button" class="pv-btn" data-pv="in" title="بزرگ‌تر">+</button>
+      <a class="pv-btn" href="${url}" target="_blank" rel="noopener" title="در تب جدید">تب جدید</a>
+    `;
+    const stage = document.createElement('div');
+    stage.className = 'pv-stage';
+    const img = document.createElement('img');
+    img.className = 'pv-img';
+    img.src = url;
+    img.alt = 'پاسخ‌برگ';
+    stage.appendChild(img);
+
+    box.innerHTML = '';
+    const wrap = document.createElement('div');
+    wrap.className = 'pv';
+    wrap.appendChild(bar);
+    wrap.appendChild(stage);
+    box.appendChild(wrap);
+
+    const zoomEl = bar.querySelector('[data-pv="zoom"]');
+    const state = { page: 1, pageCount: 1, scale: 1, isImage: true };
+
+    function emit() {
+      zoomEl.textContent = faNum(Math.round(state.scale * 100)) + '٪';
+      if (onState) onState(state);
+    }
+    function setZoom(s) {
+      state.scale = Math.max(0.3, Math.min(3, s));
+      img.style.width = (state.scale * 100) + '%';
+      emit();
+    }
+    img.addEventListener('load', () => {
+      const avail = (stage.clientWidth || box.clientWidth || 800) - 28;
+      if (img.naturalWidth > avail) { state.scale = Math.max(0.3, avail / img.naturalWidth); }
+      img.style.width = (state.scale * 100) + '%';
+      emit();
+    });
+    bar.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-pv]');
+      if (!b) return;
+      if (b.dataset.pv === 'in') setZoom(state.scale + 0.25);
+      else if (b.dataset.pv === 'out') setZoom(state.scale - 0.25);
+    });
+    img.style.width = '100%';
+    emit();
+
+    return {
+      page: 1, pageCount: 1, isImage: true,
+      next() {}, prev() {}, goto() {},
+      zoomBy: (d) => setZoom(state.scale + (typeof d === 'number' ? d : 0.25)),
+      setZoom: (s) => setZoom(s),
+      destroy() {},
+    };
+  }
+
   async function open(box, url, { onState, fitWidth = true } = {}) {
     injectCss();
     box.innerHTML = '<div class="pv-loading">در حال آماده‌سازی فایل…</div>';
+
+    // عکس (عکسِ پاسخ‌برگ) مستقیماً نمایش داده می‌شود؛ pdf.js آن را باز نمی‌کند
+    if (await isImageUrl(url)) return openImage(box, url, { onState });
 
     let pdfjs;
     try {
@@ -220,6 +307,23 @@ window.PdfViewer = (function () {
    * @returns {Promise<string[]>} آرایه‌ای از data-URL
    */
   async function pagesAsImages(url, { scale = 1.6, maxPages = 60 } = {}) {
+    // تصویر (عکسِ پاسخ‌برگ) خودش یک صفحه است — نیازی به pdf.js ندارد
+    if (await isImageUrl(url)) {
+      return [await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          try {
+            const c = document.createElement('canvas');
+            c.width = img.naturalWidth; c.height = img.naturalHeight;
+            c.getContext('2d').drawImage(img, 0, 0);
+            resolve(c.toDataURL('image/jpeg', 0.92));
+          } catch (e) { resolve(url); }   // اگر canvas آلوده شد، همان نشانی را برگردان
+        };
+        img.onerror = () => resolve(url);
+        img.src = url;
+      })];
+    }
     const pdfjs = await lib();
     const doc = await pdfjs.getDocument({ url }).promise;
     const out = [];

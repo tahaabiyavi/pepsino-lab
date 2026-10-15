@@ -17,6 +17,15 @@ const { hashPassword } = require('../src/auth/passwords');
 const silent = { error() {}, warn() {}, info() {} };
 const ORIGIN = 'http://localhost:3000';
 const PDF = () => Buffer.from('%PDF-1.4\n1 0 obj<< /Type /Catalog >> endobj\n%%EOF\n');
+/** یک PNGِ واقعی (حداقلِ معتبر) — برای آزمودنِ پاسخ‌برگ‌هایی که با گوشی عکس گرفته می‌شوند. */
+const PNG = () => Buffer.concat([
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  Buffer.from([0x00, 0x00, 0x00, 0x0d]), Buffer.from('IHDR'), Buffer.from([0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00]),
+  Buffer.from([0x90, 0x77, 0x53, 0xde]),
+  Buffer.from([0x00, 0x00, 0x00, 0x0c]), Buffer.from('IDAT'), Buffer.from([0x78, 0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0xf0, 0x9f, 0x81, 0x81, 0x01, 0x00]),
+  Buffer.from([0x0f, 0x67, 0x02, 0xfe]),
+  Buffer.from([0x00, 0x00, 0x00, 0x00]), Buffer.from('IEND'), Buffer.from([0xae, 0x42, 0x60, 0x82]),
+]);
 const HOUR = 3600e3;
 
 async function start() {
@@ -512,6 +521,111 @@ test('archived exams cannot be edited', async () => {
     s.db.prepare("UPDATE exams SET status = 'archived' WHERE id = ?").run(id);
     const r = await req(s, 'PATCH', `/api/admin/exams/${id}`, { cookie: admin, json: { title: 'تغییر ممنوع' } });
     assert.equal(r.status, 409);
+  } finally { await s.close(); }
+});
+
+
+/** سالِ تحصیلیِ نمونه را در پایگاهِ تست تضمین می‌کند. */
+function db_year(db) {
+  db.prepare("INSERT OR IGNORE INTO academic_years (label, starts_on, ends_on, created_at) VALUES ('1405-1406','2026-09-01','2027-06-30',?)").run(new Date().toISOString());
+}
+
+
+/* ============ فهرستِ مصحح: نام دانش‌آموز و پایه ============ */
+
+test('grader assignment list exposes student name and grade', async () => {
+  const s = await start();
+  try {
+    const ex = buildExam(s.db); attachKey(s, ex.id); publish(s, ex.id); openWindow(s.db, ex.id);
+    addStudent(s.db, 'stu_grade');
+    const c = (await login(s, 'stu_grade', 'StudentPass1')).cookie;
+    await req(s, 'POST', `/api/student/exams/${ex.id}/uploads`, { cookie: c, form: form(PDF(), 'g.pdf') });
+    await req(s, 'POST', `/api/student/exams/${ex.id}/submit`, { cookie: c });
+
+    createGraderAccount(s.db, { displayName: 'مصحح نام‌دار', username: 'grader_name', password: 'GraderPass1' }, { rounds: 4 });
+    closeWindow(s.db, ex.id);
+    s.db.prepare("UPDATE exams SET status = 'submission_closed' WHERE id = ?").run(ex.id);
+    grading.distributeExam(s.db, ex.id, { actor: 'admin' });
+
+    const cg = (await login(s, 'grader_name', 'GraderPass1')).cookie;
+    const r = await req(s, 'GET', '/api/grader/assignments', { cookie: cg });
+    assert.equal(r.status, 200);
+    assert.ok(r.data.assignments.length >= 1);
+    const row = r.data.assignments[0];
+    // نامِ دانش‌آموز و پایه‌اش باید در فهرست باشد (کنارِ دکمه‌ی شروع تصحیح)
+    assert.equal(row.student_name, 'دانش‌آموز stu_grade');
+    assert.equal(row.grade_label, 'پایه دهم');
+    assert.equal(row.grade_code, 'g10');
+
+    // جزئیاتِ تخصیص هم همان اطلاعات را دارد
+    const d = await req(s, 'GET', `/api/grader/assignments/${row.id}`, { cookie: cg });
+    assert.equal(d.status, 200);
+    assert.equal(d.data.assignment.studentName, 'دانش‌آموز stu_grade');
+    assert.equal(d.data.assignment.gradeLabel, 'پایه دهم');
+    assert.equal(d.data.assignment.examTitle, 'آزمون تست');
+  } finally { await s.close(); }
+});
+
+test('grader sees every uploaded answer-sheet file, not just the first', async () => {
+  const s = await start();
+  try {
+    const ex = buildExam(s.db); attachKey(s, ex.id); publish(s, ex.id); openWindow(s.db, ex.id);
+    addStudent(s.db, 'stu_files');
+    const c = (await login(s, 'stu_files', 'StudentPass1')).cookie;
+    // ترکیبی از PDF و تصویر، همان‌طور که دانش‌آموزها واقعاً می‌فرستند
+    await req(s, 'POST', `/api/student/exams/${ex.id}/uploads`, { cookie: c, form: form(PDF(), 'a.pdf') });
+    await req(s, 'POST', `/api/student/exams/${ex.id}/uploads`, { cookie: c, form: form(PNG(), 'b.png') });
+    await req(s, 'POST', `/api/student/exams/${ex.id}/uploads`, { cookie: c, form: form(PDF(), 'c.pdf') });
+    await req(s, 'POST', `/api/student/exams/${ex.id}/submit`, { cookie: c });
+
+    createGraderAccount(s.db, { displayName: 'مصحح فایل‌ها', username: 'grader_files', password: 'GraderPass1' }, { rounds: 4 });
+    closeWindow(s.db, ex.id);
+    s.db.prepare("UPDATE exams SET status = 'submission_closed' WHERE id = ?").run(ex.id);
+    grading.distributeExam(s.db, ex.id, { actor: 'admin' });
+
+    const cg = (await login(s, 'grader_files', 'GraderPass1')).cookie;
+    const list = (await req(s, 'GET', '/api/grader/assignments', { cookie: cg })).data.assignments;
+    const row = list[0];
+    // فهرست تعدادِ فایل‌ها را هم می‌گوید
+    assert.equal(row.file_count, 3);
+
+    const d = await req(s, 'GET', `/api/grader/assignments/${row.id}`, { cookie: cg });
+    assert.equal(d.status, 200);
+    // همه‌ی فایل‌ها برگردانده می‌شوند تا مصحح بتواند بینشان بچرخد
+    assert.equal(d.data.files.length, 3);
+    assert.deepEqual(d.data.files.map((f) => f.original_name).sort(), ['a.pdf', 'b.png', 'c.pdf']);
+    // هر کدام نشانیِ خودش را دارد و قابل نمایش است
+    for (const f of d.data.files) {
+      assert.equal((await req(s, 'GET', `/api/grader/assignments/${row.id}/files/${f.id}?inline=1`, { cookie: cg })).status, 200);
+    }
+    // فایلِ آزمونِ دیگری از این مصحح قابل دسترسی نیست
+    assert.equal((await req(s, 'GET', `/api/grader/assignments/${row.id}/files/999999`, { cookie: cg })).status, 404);
+  } finally { await s.close(); }
+});
+
+test('student can upload several answer-sheet files for one exam', async () => {
+  const s = await start();
+  try {
+    const ex = buildExam(s.db); attachKey(s, ex.id); publish(s, ex.id); openWindow(s.db, ex.id);
+    addStudent(s.db, 'stu_multi');
+    const c = (await login(s, 'stu_multi', 'StudentPass1')).cookie;
+
+    // سه فایلِ پشتِ سر هم (رفتارِ کلاینت پس از اصلاح: دیگر فقط files[0] نمی‌رود)
+    for (const n of ['one.pdf', 'two.pdf', 'three.pdf']) {
+      const up = await req(s, 'POST', `/api/student/exams/${ex.id}/uploads`, { cookie: c, form: form(PDF(), n) });
+      assert.equal(up.status, 201, `آپلودِ ${n} باید پذیرفته می‌شد`);
+    }
+    // هر سه در فهرستِ آپلودها هستند، نه فقط اولی
+    const list = await req(s, 'GET', `/api/student/exams/${ex.id}/uploads`, { cookie: c });
+    assert.equal(list.status, 200);
+    assert.equal(list.data.uploads.length, 3);
+    assert.deepEqual(list.data.uploads.map((u) => u.original_name), ['one.pdf', 'two.pdf', 'three.pdf']);
+
+    // و همگی هنگامِ ثبتِ نهایی به submission_files منتقل می‌شوند
+    const fin = await req(s, 'POST', `/api/student/exams/${ex.id}/submit`, { cookie: c, json: {} });
+    assert.equal(fin.status, 201);
+    const n = s.db.prepare('SELECT COUNT(*) n FROM submission_files WHERE submission_id = ?').get(fin.data.submission.id).n;
+    assert.equal(n, 3, 'هر سه فایل باید در ارسالِ نهایی باشند');
   } finally { await s.close(); }
 });
 

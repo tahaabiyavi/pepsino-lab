@@ -140,10 +140,10 @@ async function openExamDetail(examId, opts) {
       <div class="field" style="margin-top:18px">
         <label>آپلود پاسخنامه دانش‌آموز (عکس یا PDF از برگه دست‌نویس)</label>
         <div class="img-slot" id="dropSlot">
-          <span>برای انتخاب فایل کلیک کنید یا فایل را اینجا رها کنید</span>
+          <span>برای انتخاب فایل(ها) کلیک کنید یا فایل‌ها را اینجا رها کنید</span>
           <span class="hint2">فایل پاسخنامه خود را بارگذاری کنید</span>
         </div>
-        <input type="file" id="fileInput" accept="application/pdf,image/*" class="hidden">
+        <input type="file" id="fileInput" accept="application/pdf,image/*" multiple class="hidden">
       </div>
       <div class="file-list" id="fileList"></div>
       <button class="btn primary block" id="submitExamBtn" style="margin-top:14px">ثبت نهایی پاسخ‌ها</button>
@@ -195,11 +195,20 @@ async function openExamDetail(examId, opts) {
     const slot = document.getElementById('dropSlot');
     const input = document.getElementById('fileInput');
     slot.addEventListener('click', () => input.click());
-    input.addEventListener('change', () => { if (input.files[0]) uploadFile(examId, input.files[0]); });
+    // انتخابِ چندتایی: همه‌ی فایل‌ها پشتِ سر هم فرستاده می‌شوند و تازه در پایان
+    // یک بار صفحه بازسازی می‌شود (قبلاً فقط files[0] می‌رفت و بقیه از دست می‌رفت).
+    input.addEventListener('change', () => {
+      const picked = Array.from(input.files || []);
+      input.value = '';                       // تا دوباره بتوان همان فایل را برگزید
+      if (picked.length) uploadFiles(examId, picked);
+    });
     ['dragover', 'dragleave', 'drop'].forEach((ev) => slot.addEventListener(ev, (e) => {
       e.preventDefault();
       slot.classList.toggle('drag', ev === 'dragover');
-      if (ev === 'drop' && e.dataTransfer.files[0]) uploadFile(examId, e.dataTransfer.files[0]);
+      if (ev === 'drop') {
+        const dropped = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+        if (dropped.length) uploadFiles(examId, dropped);
+      }
     }));
     document.getElementById('submitExamBtn').addEventListener('click', () => submitExam(examId));
   }
@@ -223,11 +232,28 @@ function renderFileList(uploads, examId) {
 async function uploadFile(examId, file) {
   const fd = new FormData();
   fd.append('file', file);
+  await API.post(`/api/student/exams/${examId}/uploads`, fd);
+}
+
+/**
+ * چند فایل را یکی‌یکی می‌فرستد و فقط در پایان یک بار صفحه را بازسازی می‌کند.
+ * (بازسازی میانِ هر فایل، فایل‌هایِ در صف را از دست می‌داد.)
+ */
+async function uploadFiles(examId, files) {
+  const slot = document.getElementById('dropSlot');
+  let ok = 0; let failed = 0; let lastErr = '';
+  if (slot) { slot.style.opacity = '.55'; slot.style.pointerEvents = 'none'; }
   try {
-    await API.post(`/api/student/exams/${examId}/uploads`, fd);
-    Toast.show('فایل بارگذاری شد', 'good');
-    openExamDetail(examId);
-  } catch (e) { Toast.show(e.message, 'bad'); }
+    for (const f of files) {
+      try { await uploadFile(examId, f); ok += 1; } catch (e) { failed += 1; lastErr = e.message || ''; }
+    }
+  } finally {
+    if (slot) { slot.style.opacity = ''; slot.style.pointerEvents = ''; }
+  }
+  if (ok && !failed) Toast.show(faNum(ok) + ' فایل بارگذاری شد', 'good');
+  else if (ok && failed) Toast.show(faNum(ok) + ' فایل رفت، ' + faNum(failed) + ' ناموفق' + (lastErr ? ' — ' + lastErr : ''), 'bad');
+  else Toast.show(lastErr || 'هیچ فایلی بارگذاری نشد', 'bad');
+  openExamDetail(examId);
 }
 
 async function submitExam(examId) {

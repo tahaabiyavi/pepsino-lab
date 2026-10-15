@@ -281,9 +281,14 @@ function mountExamRoutes(app, { db, config, log = console, triggerOutbox = () =>
   app.get('/api/grader/assignments', graderOnly, (req, res) => {
     const rows = db.prepare(
       `SELECT a.id, a.state, a.assigned_at, a.completed_at, e.id AS exam_id, e.title AS exam_title,
+              st.full_name AS student_name, st.username AS student_username,
+              g.label AS grade_label, g.code AS grade_code,
+              (SELECT COUNT(*) FROM submission_files sf WHERE sf.submission_id = a.submission_id) AS file_count,
               EXISTS(SELECT 1 FROM appeals ap WHERE ap.submission_id = a.submission_id AND ap.status = 'open') AS has_appeal
          FROM grading_assignments a
          JOIN submissions s ON s.id = a.submission_id JOIN exams e ON e.id = s.exam_id
+         JOIN students st ON st.id = s.student_id
+         LEFT JOIN grades g ON g.id = st.grade_id
         WHERE a.grader_id = ? AND a.state IN ('active','completed')
         ORDER BY a.assigned_at`
     ).all(req.auth.id);
@@ -310,12 +315,21 @@ function mountExamRoutes(app, { db, config, log = console, triggerOutbox = () =>
     const files = db.prepare('SELECT id, original_name, mime_type, size_bytes FROM submission_files WHERE submission_id = ?').all(a.submission_id);
     const hasKey = Boolean(db.prepare('SELECT 1 FROM answer_keys WHERE exam_id = ?').get(sub.exam_id));
     const appeal = db.prepare("SELECT id, status FROM appeals WHERE submission_id = ? AND status = 'open' LIMIT 1").get(a.submission_id);
-    const student = db.prepare('SELECT full_name FROM students WHERE id = ?').get(sub.student_id);
+    const student = db.prepare(
+      `SELECT st.full_name, st.username, g.label AS grade_label, g.code AS grade_code,
+              (SELECT title FROM exams WHERE id = ?) AS exam_title
+         FROM students st LEFT JOIN grades g ON g.id = st.grade_id
+        WHERE st.id = ?`,
+    ).get(sub.exam_id, sub.student_id);
     res.json({
       assignment: {
         id: a.id, state: a.state, submissionId: a.submission_id, examId: sub.exam_id,
         overallComment: a.overall_comment, assignedAt: a.assigned_at, completedAt: a.completed_at,
-        hasAppeal: Boolean(appeal), studentName: student ? student.full_name : null,
+        hasAppeal: Boolean(appeal),
+        studentName: student ? student.full_name : null,
+        studentUsername: student ? student.username : null,
+        gradeLabel: student ? student.grade_label : null,
+        examTitle: student ? student.exam_title : null,
       },
       answerKey: { available: hasKey, path: `/api/grader/exams/${sub.exam_id}/answer-key` },
       questions, scores, files,

@@ -63,8 +63,18 @@ function renderAssignList() {
           <span class="small muted">تخصیص: ${fmtDateTime(a.assigned_at)}</span>
           ${a.completed_at ? `<span class="small muted">پایان: ${fmtDateTime(a.completed_at)}</span>` : ''}
         </div>
+        <div class="meta" style="margin-top:6px">
+          ${a.student_name ? `<span class="tag b">👤 ${esc(a.student_name)}</span>` : ''}
+          ${a.grade_label ? `<span class="tag b">🎓 ${esc(a.grade_label)}</span>` : ''}
+          ${a.file_count > 1 ? `<span class="tag b">📎 ${faNum(a.file_count)} فایل</span>` : ''}
+        </div>
       </div>
-      <button class="btn sm" data-open="${a.id}">${a.state === 'completed' ? 'مشاهده' : 'ادامهٔ تصحیح'}</button>
+      <div style="text-align:end">
+        <button class="btn sm" data-open="${a.id}">${a.state === 'completed' ? 'مشاهده' : 'شروع تصحیح'}</button>
+        <div class="small muted" style="margin-top:6px">
+          ${a.student_name ? esc(a.student_name) : ''}${a.grade_label ? ' · ' + esc(a.grade_label) : ''}
+        </div>
+      </div>
     </div>`).join('') || `<div class="empty-state card soft"><b>برگه‌ای در این بخش نیست</b></div>`;
   box.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => openAssignment(Number(b.dataset.open))));
 }
@@ -88,9 +98,11 @@ async function renderGrading(data, assignmentId) {
   const box = document.getElementById('gradeBox');
   const marks = [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
-  const studentFileUrl = files.length
-    ? `/api/grader/assignments/${assignmentId}/files/${files[0].id}?inline=1`
-    : null;
+  // دانش‌آموز ممکن است چند فایل فرستاده باشد؛ مصحح باید بتواند بینشان بچرخد
+  const fileUrl = (i) => (files[i]
+    ? `/api/grader/assignments/${assignmentId}/files/${files[i].id}?inline=1`
+    : null);
+  let fileIdx = 0;
   const keyUrl = answerKey.available ? `${answerKey.path}?inline=1` : null;
 
   box.innerHTML = `
@@ -116,13 +128,18 @@ async function renderGrading(data, assignmentId) {
       </div>
       <div class="card soft">
         <div class="row wrap-r"><b>پاسخنامه دانش‌آموز</b>
+          ${files.length > 1 ? `<span class="small muted" id="fileCounter"></span>` : ''}
           <span class="spacer"></span>
+          ${files.length > 1 ? `
+            <button class="btn sm ghost" data-file="-">‹ قبلی</button>
+            <button class="btn sm ghost" data-file="+">بعدی ›</button>` : ''}
           <button class="btn sm ghost" data-zoom="stu" data-dir="-">−</button>
           <button class="btn sm ghost" data-zoom="stu" data-dir="+">+</button>
-          ${studentFileUrl ? `<a class="btn sm ghost" href="${studentFileUrl}" target="_blank">تب جدید</a>` : ''}
+          ${files.length ? `<a class="btn sm ghost" id="stuFileLink" target="_blank">تب جدید</a>` : ''}
         </div>
+        ${files.length > 1 ? `<div class="small muted" id="fileName" style="margin-top:4px"></div>` : ''}
         <div id="stuViewer" style="margin-top:8px">
-          ${studentFileUrl ? '' : '<p class="small muted" style="padding:16px">فایل پاسخ دانش‌آموز موجود نیست</p>'}
+          ${files.length ? '' : '<p class="small muted" style="padding:16px">فایل پاسخ دانش‌آموز موجود نیست</p>'}
         </div>
       </div>
     </div>
@@ -154,7 +171,26 @@ async function renderGrading(data, assignmentId) {
     try { viewers[which] = await PdfViewer.open(el, url); } catch (e) { /* می‌ماند برای fallback */ }
   }
   await mountViewer('key', keyUrl, 'keyViewer');
-  await mountViewer('stu', studentFileUrl, 'stuViewer');
+
+  /** نمایشِ فایلِ j-امِ پاسخ‌برگ (دانش‌آموز ممکن است چند فایل فرستاده باشد) */
+  async function showFile(i) {
+    if (!files.length) return;
+    fileIdx = (i + files.length) % files.length;
+    const url = fileUrl(fileIdx);
+    if (viewers.stu && viewers.stu.destroy) { try { viewers.stu.destroy(); } catch (e) {} viewers.stu = null; }
+    const counter = document.getElementById('fileCounter');
+    if (counter) counter.textContent = `فایل ${faNum(fileIdx + 1)} از ${faNum(files.length)}`;
+    const nameEl = document.getElementById('fileName');
+    if (nameEl) nameEl.textContent = files[fileIdx].original_name || '';
+    const link = document.getElementById('stuFileLink');
+    if (link) link.href = url;
+    await mountViewer('stu', url, 'stuViewer');
+  }
+  await showFile(0);
+
+  box.querySelectorAll('[data-file]').forEach((b) => {
+    b.addEventListener('click', () => showFile(fileIdx + (b.dataset.file === '+' ? 1 : -1)));
+  });
 
   box.querySelectorAll('[data-zoom]').forEach((b) => {
     b.addEventListener('click', () => {
