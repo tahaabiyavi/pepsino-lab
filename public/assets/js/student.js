@@ -665,7 +665,6 @@ function renderHome(d) {
   set('homeExamsSub', t.exams_sub);
   set('homeBoardTitle', t.board_title);
   set('homeBoardSub', t.board_sub);
-  set('homeGuideTitle', t.guide_title);
   set('homeStatsTitle', t.stats_title);
   const lead = document.getElementById('homeLead');
   if (lead) lead.innerHTML = t.home_lead || '';
@@ -681,7 +680,6 @@ function renderHome(d) {
   renderHomeCalendar();
   renderHomeExams(d);
   renderHomeBoard(d);
-  renderHomeGuide(d, t);
   wireHomePrint(d, t);
 }
 
@@ -974,12 +972,6 @@ function renderHomeBoard(d) {
     '<span class="top-medal">' + (r.medal || faNum(r.rank)) + '</span>' +
     '<span class="top-name">' + esc(r.fullName || '—') + (r.isMe ? ' <span class="small muted">(شما)</span>' : '') + '</span>' +
     '<span class="top-score">' + faNum(r.totalMark) + '</span></div>').join('') + '</div>';
-}
-
-/* ---------------------------------------------------------------- راهنما */
-function renderHomeGuide(d, t) {
-  setText('homeGuideStudent', t.guide_student || '');
-  setText('homeGuideNotes', t.guide_notes || '');
 }
 
 function setText(id, val) {

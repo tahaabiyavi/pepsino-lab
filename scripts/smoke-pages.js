@@ -113,7 +113,14 @@ async function check(file, cookie, assertions, before) {
       'جدول برنامه پر شده': (d) => d.querySelectorAll('#homePlanTableBody tr').length >= 1,
       'تقویم رندر شده': (d) => d.querySelectorAll('#homeCalBody .cal-cell').length >= 28,
       'آزمون‌ها رندر شده': (d) => d.querySelectorAll('#homeExamGrid .night-card').length >= 1,
-      'راهنما پر شده': (d) => (d.getElementById('homeGuideStudent').textContent || '').length > 10,
+      // بخش «راهنمای سریع» بنا به درخواست حذف شده است
+      'راهنما حذف شده': (d) => !d.getElementById('homeGuideTitle')
+        && !d.getElementById('homeGuideStudent')
+        && !d.getElementById('homeGuideNotes'),
+      'متنِ راهنما در صفحه نیست': (d) => !/راهنمای سریع|نکته‌های مهم/.test(d.body.textContent),
+      'عنوانِ برنامه راهبردی': (d) => (d.getElementById('homePlanTitle').textContent || '').includes('برنامه راهبردی'),
+      'زیرعنوانِ برنامه خالی است': (d) => (d.getElementById('homePlanSub').textContent || '').trim() === '',
+      'متن قدیمیِ برنامه حذف شده': (d) => !/مراحل مربوط به پایه/.test(d.body.textContent),
       'خروجیِ چاپ آماده است': (d) => typeof d.defaultView.Print === 'object',
       'برگهٔ چاپ ساخته شده': (d) => !!d.querySelector('#printArea .p-page'),
       'سربرگِ برند در برگهٔ چاپ': (d) => !!d.querySelector('#printArea .p-head .p-logo'),
