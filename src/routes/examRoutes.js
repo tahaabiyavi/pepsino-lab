@@ -76,12 +76,22 @@ function mountExamRoutes(app, { db, config, log = console, triggerOutbox = () =>
     ).all(id).map((q) => ({ ...q, max_mark: formatQuarters(q.max_quarters) }));
     const hasKey = db.prepare('SELECT COUNT(*) n FROM answer_keys WHERE exam_id = ?').get(id).n > 0;
     const qFile = db.prepare('SELECT original_name, size_bytes, uploaded_at FROM exam_question_files WHERE exam_id = ?').get(id);
+    const aFile = db.prepare('SELECT original_name, mime_type, size_bytes, uploaded_at FROM exam_audio_files WHERE exam_id = ?').get(id);
+    const subjects = db.prepare(
+      `SELECT s.id, s.code, s.label FROM exam_subjects es JOIN subjects s ON s.id = es.subject_id
+        WHERE es.exam_id = ? ORDER BY s.id`,
+    ).all(id);
     res.json({
       exam,
       questions,
       hasAnswerKey: hasKey,
       hasQuestionsFile: Boolean(qFile),
       questionsFile: qFile || null,
+      // فایلِ صوتیِ لیسنینگ فقط برای آزمونِ زبان انگلیسی معنا دارد
+      hasEnglish: hasEnglish(db, id),
+      hasAudioFile: Boolean(aFile),
+      audioFile: aFile || null,
+      subjects,
       publicationProblems: exams.publicationProblems(db, id),
     });
   }));
@@ -192,6 +202,75 @@ function mountExamRoutes(app, { db, config, log = console, triggerOutbox = () =>
     const id = idParam(req.params.id);
     const f = db.prepare('SELECT * FROM exam_question_files WHERE exam_id = ?').get(id);
     if (!f) throw notFound('فایل سؤالات یافت نشد');
+    sendPrivate(res, config, f, { inline: true });
+  }));
+
+  /* ================= فایل صوتیِ لیسنینگ (فقط آزمونِ زبان انگلیسی) ================= */
+
+  /** آیا این آزمون درسِ «زبان انگلیسی» را دارد؟ */
+  function hasEnglish(db, examId) {
+    const row = db.prepare(
+      `SELECT 1 FROM exam_subjects es JOIN subjects s ON s.id = es.subject_id
+        WHERE es.exam_id = ? AND (s.code = 'en' OR s.label LIKE '%انگلیسی%') LIMIT 1`,
+    ).get(examId);
+    return Boolean(row);
+  }
+
+  app.post('/api/admin/exams/:id/audio', adminOnly, uploadSingle, safeRoute((req, res) => {
+    const id = idParam(req.params.id);
+    const exam = exams.getExam(db, id);
+    if (!req.file) throw badRequest('invalid_upload', 'فایل صوتی لازم است');
+    if (exam.status === 'archived') throw conflict('exam_locked', 'آزمون بایگانی شده است');
+    if (!hasEnglish(db, id)) {
+      throw conflict('not_english_exam', 'فایل صوتی فقط برای آزمونِ زبان انگلیسی است');
+    }
+    // لیسنینگ می‌تواند طولانی باشد — سقفِ ۲۰ مگابایت
+    const meta = storage.validateUpload({ buffer: req.file.buffer, originalName: req.file.originalname, maxBytes: 20 * 1024 * 1024 });
+    if (!String(meta.mimeType).startsWith('audio/')) {
+      throw badRequest('invalid_upload', 'فایل باید صوتی باشد (MP3، M4A، OGG یا WAV)');
+    }
+    const name = storage.writePrivate(config.dataDir, req.file.buffer);
+    const old = db.prepare('SELECT storage_name FROM exam_audio_files WHERE exam_id = ?').get(id);
+    const now = new Date().toISOString();
+    db.transaction(() => {
+      db.prepare(`INSERT INTO exam_audio_files (exam_id, original_name, mime_type, size_bytes, sha256, storage_name, uploaded_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?)
+                  ON CONFLICT(exam_id) DO UPDATE SET original_name = excluded.original_name, mime_type = excluded.mime_type,
+                    size_bytes = excluded.size_bytes, sha256 = excluded.sha256, storage_name = excluded.storage_name, uploaded_at = excluded.uploaded_at`)
+        .run(id, meta.originalName, meta.mimeType, meta.sizeBytes, meta.sha256, name, now);
+      recordAudit(db, { actor: 'admin', action: 'listening_audio.uploaded', entityType: 'exam', entityId: id, details: { sha256: meta.sha256, size: meta.sizeBytes } });
+    })();
+    if (old) storage.removePrivate(config.dataDir, old.storage_name);
+    res.status(201).json({ ok: true, original_name: meta.originalName, size_bytes: meta.sizeBytes });
+  }));
+
+  app.delete('/api/admin/exams/:id/audio', adminOnly, safeRoute((req, res) => {
+    const id = idParam(req.params.id);
+    const exam = exams.getExam(db, id);
+    if (exam.status === 'archived') throw conflict('exam_locked', 'آزمون بایگانی شده است');
+    const f = db.prepare('SELECT storage_name FROM exam_audio_files WHERE exam_id = ?').get(id);
+    if (!f) throw notFound('فایل صوتی یافت نشد');
+    db.prepare('DELETE FROM exam_audio_files WHERE exam_id = ?').run(id);
+    storage.removePrivate(config.dataDir, f.storage_name);
+    recordAudit(db, { actor: 'admin', action: 'listening_audio.deleted', entityType: 'exam', entityId: id });
+    res.json({ ok: true });
+  }));
+
+  app.get('/api/admin/exams/:id/audio', adminOnly, safeRoute((req, res) => {
+    const id = idParam(req.params.id);
+    const f = db.prepare('SELECT * FROM exam_audio_files WHERE exam_id = ?').get(id);
+    if (!f) throw notFound('فایل صوتی یافت نشد');
+    sendPrivate(res, config, f, { inline: true });
+  }));
+
+  // پخشِ فایلِ لیسنینگ برای دانش‌آموز — فقط وقتی آزمون شروع شده باشد
+  app.get('/api/student/exams/:id/audio', studentOnly, safeRoute((req, res) => {
+    const id = idParam(req.params.id);
+    const exam = exams.getExam(db, id);
+    if (!exams.isEligible(db, id, req.auth.id)) throw forbidden('این آزمون برای شما در دسترس نیست');
+    if (new Date() < new Date(exam.starts_at)) throw conflict('not_started', 'آزمون هنوز شروع نشده است');
+    const f = db.prepare('SELECT * FROM exam_audio_files WHERE exam_id = ?').get(id);
+    if (!f) throw notFound('فایل صوتی برای این آزمون وجود ندارد');
     sendPrivate(res, config, f, { inline: true });
   }));
 
@@ -377,7 +456,8 @@ function mountExamRoutes(app, { db, config, log = console, triggerOutbox = () =>
   // ---------------------------------------------------------------- student
   app.get('/api/student/exams', studentOnly, (req, res) => {
     const rows = db.prepare(
-      `SELECT e.id, e.title, e.status, e.starts_at, e.submission_deadline, e.results_publish_at, e.results_published_at,
+      `SELECT e.id, e.title, e.status, e.starts_at, e.duration_minutes, e.submission_deadline,
+              e.results_publish_at, e.results_published_at,
               e.answer_key_published_at, s.status AS my_status, s.submitted_at
          FROM exams e
          JOIN exam_grades eg ON eg.exam_id = e.id
@@ -394,6 +474,9 @@ function mountExamRoutes(app, { db, config, log = console, triggerOutbox = () =>
           // قفل (before) / در حال برگزاری (open) / پایان‌یافته (after)
           windowState: home.windowState(r, now),
           countdownTarget: home.countdownTarget(r, now).target,
+          // پایانِ «مدتِ آزمون» (نه مهلتِ ارسال) — شمارش معکوسِ صفحه‌ی آزمون
+          allowedUntil: exams.allowedUntil(r),
+          hasAudio: Boolean(db.prepare('SELECT 1 FROM exam_audio_files WHERE exam_id = ?').get(r.id)),
         })),
     });
   });

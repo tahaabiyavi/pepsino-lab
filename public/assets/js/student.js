@@ -106,21 +106,63 @@ async function openExamDetail(examId, opts) {
   const open = ['published', 'in_progress'].includes(ex.status) && now < new Date(ex.submission_deadline) && !ex.my_status;
   const canUpload = open && !practice;
 
+  const showQuestions = now >= new Date(ex.starts_at || 0);
+
+  /**
+   * پایانِ «مدتِ آزمون» — نه مهلتِ ارسال. دانش‌آموز فقط به اندازه‌ی
+   * duration_minutes وقت دارد؛ وقتی این زمان تمام شود از آزمون بیرون می‌رود.
+   */
+  const allowedUntilIso = ex.allowedUntil
+    || (ex.starts_at
+      ? new Date(Math.min(
+        new Date(ex.starts_at).getTime() + (Number(ex.duration_minutes) || 0) * 60000,
+        new Date(ex.submission_deadline || Infinity).getTime(),
+      )).toISOString()
+      : null);
+  const allowedMs = allowedUntilIso ? new Date(allowedUntilIso) - now : 0;
+  const timeOver = Boolean(allowedUntilIso) && allowedMs <= 0 && showQuestions;
+  // وقتی وقت تمام شده، دیگر اجازه‌ی آپلود نیست
+  const mayUpload = canUpload && !timeOver;
+
   let uploads = [];
-  if (canUpload) {
+  if (mayUpload) {
     try { uploads = (await API.get(`/api/student/exams/${examId}/uploads`)).uploads; } catch (e) {}
   }
 
-  const endMs = new Date(ex.submission_deadline) - now;
-  const showQuestions = now >= new Date(ex.starts_at || 0);
   card.innerHTML = `
     <h3>${esc(ex.title)}</h3>
     <div class="row wrap-r" style="margin-top:8px">
       <span class="tag">${esc(faStatus(ex.status))}</span>
       <span class="small muted">شروع: ${fmtDateTime(ex.starts_at || '')}</span>
+      <span class="small muted">مدت: ${faNum(ex.duration_minutes || 0)} دقیقه</span>
       <span class="small muted">مهلت ارسال: ${fmtDateTime(ex.submission_deadline)}</span>
     </div>
-    ${canUpload && endMs > 0 ? `<div class="card soft" style="margin-top:12px;text-align:center"><b id="examCountdown" data-cd="${endMs}">${formatCountdown(endMs)} تا پایان این آزمون</b></div>` : ''}
+
+    ${timeOver ? `
+      <div class="card soft" style="margin-top:14px;text-align:center;border:2px solid var(--p10-deep,#B4451F);background:#FFF3EE">
+        <b style="font-size:1.15em;color:var(--p10-deep,#B4451F)">مدت زمان مجاز آزمون به اتمام رسیده است ⏳</b>
+        <p class="small muted" style="margin-top:6px">زمانِ ${faNum(ex.duration_minutes || 0)} دقیقه‌ایِ این آزمون پایان یافت و دیگر امکان ارسال پاسخ ندارید.</p>
+      </div>
+    ` : (mayUpload && allowedMs > 0 ? `
+      <div class="card soft" style="margin-top:12px;text-align:center">
+        <div class="small muted">زمان باقی‌مانده‌ی آزمون</div>
+        <b id="examCountdown" data-cd="${allowedMs}" style="font-size:1.25em;font-variant-numeric:tabular-nums">${formatCountdown(allowedMs)}</b>
+      </div>
+    ` : '')}
+
+    ${showQuestions && ex.hasAudio ? `
+      <div class="card soft" style="margin-top:16px">
+        <div class="row wrap-r">
+          <b>🎧 بخش لیسنینگ</b>
+          <span class="spacer"></span>
+          <a class="btn sm ghost" href="/api/student/exams/${examId}/audio" download>دانلود فایل صوتی</a>
+        </div>
+        <p class="small muted" style="margin-top:4px">فایل صوتی را پخش کنید و هم‌زمان به سؤالات پاسخ دهید.</p>
+        <audio id="listeningAudio" controls preload="metadata"
+               src="/api/student/exams/${examId}/audio"
+               style="width:100%;margin-top:8px"></audio>
+      </div>
+    ` : ''}
 
     ${ex.my_status ? `<div class="badge-lock" style="margin-top:16px">وضعیت ارسال شما: <b>${esc(faStatus(ex.my_status))}</b>${ex.submitted_at ? ' — ' + fmtDateTime(ex.submitted_at) : ''}</div>` : ''}
 
@@ -136,7 +178,7 @@ async function openExamDetail(examId, opts) {
       </div>
     ` : '<p class="small muted" style="margin-top:12px">فایل سؤالات پس از شروع آزمون نمایش داده می‌شود.</p>'}
 
-    ${canUpload ? `
+    ${mayUpload ? `
       <div class="field" style="margin-top:18px">
         <label>آپلود پاسخنامه دانش‌آموز (عکس یا PDF از برگه دست‌نویس)</label>
         <div class="img-slot" id="dropSlot">
@@ -153,15 +195,33 @@ async function openExamDetail(examId, opts) {
     ${ex.answer_key_published_at ? `<a class="btn ghost sm" style="margin-top:14px" href="/api/student/exams/${examId}/answer-key" target="_blank">دانلود پاسخنامهٔ رسمی</a>` : ''}
     ${ex.results_published_at ? `<button class="btn sm" style="margin-top:14px" data-go="results">مشاهدهٔ کارنامه</button>` : ''}
   `;
-  // شمارش معکوس و زوم
-  if (canUpload && endMs > 0) {
-    const cdEl = document.getElementById('examCountdown');
-    const t = setInterval(() => {
-      if (!cdEl) { clearInterval(t); return; }
-      let ms = Number(cdEl.dataset.cd) - 1000;
+  // شمارش معکوسِ «مدتِ آزمون» — با اتمامش دانش‌آموز از آزمون بیرون می‌رود
+  if (mayUpload && allowedMs > 0) {
+    if (EXAM_CD_TIMER) clearInterval(EXAM_CD_TIMER);
+    let kicked = false;
+    EXAM_CD_TIMER = setInterval(() => {
+      const cdEl = document.getElementById('examCountdown');
+      const onExam = (() => {
+        const v = document.getElementById('view-examDetail');
+        return Boolean(v) && !v.classList.contains('hidden');
+      })();
+      // اگر از صفحه‌ی آزمون خارج شده، تایمر را خاموش کن (با بازگشت دوباره ساخته می‌شود)
+      if (!cdEl || !onExam) { clearInterval(EXAM_CD_TIMER); EXAM_CD_TIMER = null; return; }
+      const ms = Number(cdEl.dataset.cd) - 1000;
       cdEl.dataset.cd = ms;
-      if (ms <= 0) { cdEl.textContent = 'مهلت ارسال به پایان رسید'; clearInterval(t); return; }
-      cdEl.textContent = formatCountdown(ms) + ' تا پایان این آزمون';
+      if (ms <= 0) {
+        clearInterval(EXAM_CD_TIMER); EXAM_CD_TIMER = null;
+        if (kicked) return;
+        kicked = true;
+        // صوت را هم متوقف کن که در پس‌زمینه پخش نماند
+        const au = document.getElementById('listeningAudio');
+        if (au) { try { au.pause(); } catch (e) {} }
+        // بیرون انداختن از صفحه‌ی آزمون + آگاه‌سازی (go خودش loadHome را صدا می‌زند)
+        go('home');
+        Toast.show('مدت زمان مجاز آزمون به اتمام رسیده است ⏳', 'bad');
+        return;
+      }
+      cdEl.textContent = formatCountdown(ms);
     }, 1000);
   }
   // نمایشگرِ PDF با دکمه‌های صفحه‌ی قبل/بعد و بزرگ‌نمایی
@@ -190,7 +250,7 @@ async function openExamDetail(examId, opts) {
   }
 
 
-  if (canUpload) {
+  if (mayUpload) {
     renderFileList(uploads, examId);
     const slot = document.getElementById('dropSlot');
     const input = document.getElementById('fileInput');
@@ -830,6 +890,7 @@ function renderHomeCurrent(d, t) {
 
 
 let HOME_CD_TIMER = null;
+let EXAM_CD_TIMER = null;
 /** شمارش معکوسِ همه‌ی کارت‌های آزمون (هر تعداد که باشند) را همزمان جلو می‌برد. */
 function startHomeCountdowns() {
   if (HOME_CD_TIMER) clearInterval(HOME_CD_TIMER);

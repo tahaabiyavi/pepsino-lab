@@ -73,6 +73,26 @@ function createExam(db, input, { now = new Date(), actor = 'admin' } = {}) {
 }
 
 /**
+ * پایانِ «مدتِ آزمون» برای دانش‌آموز — همان چیزی که شمارش معکوسِ صفحه‌ی
+ * آزمون به آن می‌رسد. این با submission_deadline فرق دارد: مهلتِ ارسال
+ * پنجره‌ای است که مدیر برای بارگذاری باز می‌گذارد (مثلاً تا فردا)، اما
+ * دانش‌آموز فقط به اندازه‌ی duration_minutes وقتِ حل دارد.
+ *
+ * هر کدام زودتر برسد ملاک است، تا هیچ‌وقت بیش از مهلتِ ارسال وقت داده نشود.
+ *
+ * @returns {string|null} ISO یا null اگر زمانِ شروع معلوم نباشد
+ */
+function allowedUntil(exam) {
+  if (!exam || !exam.starts_at) return null;
+  const start = new Date(exam.starts_at).getTime();
+  if (Number.isNaN(start)) return null;
+  const byDuration = start + (Number(exam.duration_minutes) || 0) * 60000;
+  const deadline = exam.submission_deadline ? new Date(exam.submission_deadline).getTime() : Infinity;
+  const ms = Math.min(byDuration, Number.isNaN(deadline) ? byDuration : deadline);
+  return new Date(ms).toISOString();
+}
+
+/**
  * ویرایشِ مشخصاتِ آزمون: عنوان، مدت، توضیحات و (اختیاری) پایه‌ها/رشته‌ها/درس‌ها.
  * زمان‌بندی را تغییر نمی‌دهد — برای آن updateSchedule را صدا بزن.
  * آزمونِ بایگانی‌شده دیگر قابل ویرایش نیست.
@@ -391,5 +411,5 @@ function isEligible(db, examId, studentId) {
 
 module.exports = {
   TRANSITIONS, createExam, addQuestion, publicationProblems, transition, updateSchedule,
-  recordSubmission, isEligible, getExam, touchExam, updateExam, deleteExam,
+  recordSubmission, isEligible, getExam, touchExam, updateExam, deleteExam, allowedUntil,
 };

@@ -298,6 +298,31 @@ function renderExamDetail(data, examId) {
     </div>
 
     <div class="panel soft" style="margin-top:16px">
+      <h3>🎧 فایل صوتیِ لیسنینگ (ویژهٔ زبان انگلیسی)</h3>
+      ${data.hasEnglish ? `
+        <p class="hint">فایل صوتیِ بخشِ لیسنینگ. دانش‌آموز هنگامِ آزمون آن را در همان صفحه پخش می‌کند.</p>
+        ${data.hasAudioFile
+    ? `<p class="small">فایل فعلی: <b>${esc(data.audioFile.original_name)}</b> (${fmtBytes(data.audioFile.size_bytes)})</p>
+             <audio controls preload="metadata" src="/api/admin/exams/${examId}/audio" style="width:100%;margin:8px 0"></audio>
+             <div class="row wrap-r">
+               <a class="btn sm ghost" href="/api/admin/exams/${examId}/audio" target="_blank">دانلود</a>
+               ${exam.status !== 'archived' ? '<button class="btn sm danger" id="audioDelBtn">حذف فایل صوتی</button>' : ''}
+             </div>`
+    : '<p class="small muted">هنوز فایل صوتی بارگذاری نشده است.</p>'}
+        ${exam.status !== 'archived' ? `
+          <div class="field" style="margin-top:10px">
+            <label>${data.hasAudioFile ? 'جایگزینی فایل صوتی' : 'انتخاب فایل صوتی'} (MP3، M4A، OGG یا WAV — حداکثر ۲۰ مگابایت)</label>
+            <input type="file" id="audioFile" accept="audio/*,.mp3,.m4a,.aac,.ogg,.oga,.opus,.wav,.weba">
+          </div>
+          <button class="btn sm primary" id="audioUploadBtn" style="margin-top:8px">بارگذاری فایل صوتی</button>
+        ` : ''}
+      ` : `
+        <p class="small muted">این آزمون درسِ «زبان انگلیسی» ندارد، پس بخشِ لیسنینگ برایش معنا ندارد.</p>
+        <p class="small muted">درس‌های این آزمون: ${(data.subjects || []).map((s) => esc(s.label)).join('، ') || '—'}</p>
+      `}
+    </div>
+
+    <div class="panel soft" style="margin-top:16px">
       <h3>وضعیت دانش‌آموزان</h3>
       <button class="btn sm ghost" id="markAbsentBtn">ثبت غیبت دانش‌آموز</button>
     </div>
@@ -419,6 +444,35 @@ function renderExamDetail(data, examId) {
       loadExams();
       if (document.getElementById('panel-exams')) document.getElementById('panel-exams').classList.remove('hidden');
     }
+  });
+
+  // ---- فایل صوتیِ لیسنینگ (فقط آزمونِ زبان انگلیسی) ----
+  const audioUp = document.getElementById('audioUploadBtn');
+  if (audioUp) audioUp.addEventListener('click', async () => {
+    const file = document.getElementById('audioFile').files[0];
+    if (!file) { Toast.show('فایل صوتی را انتخاب کنید', 'bad'); return; }
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      await API.post(`/api/admin/exams/${examId}/audio`, fd);
+      Toast.show('فایل صوتی بارگذاری شد', 'good');
+      openExamDetail(examId);
+    } catch (e) { Toast.show(e.message, 'bad'); }
+  });
+
+  const audioDel = document.getElementById('audioDelBtn');
+  if (audioDel) audioDel.addEventListener('click', async () => {
+    const ok = await confirmModal({
+      title: 'حذف فایل صوتی',
+      body: 'فایل صوتیِ لیسنینگ از این آزمون حذف می‌شود. ادامه می‌دهید؟',
+      okText: 'حذف', danger: true,
+    });
+    if (!ok) return;
+    try {
+      await API.del(`/api/admin/exams/${examId}/audio`);
+      Toast.show('فایل صوتی حذف شد', 'good');
+      openExamDetail(examId);
+    } catch (e) { Toast.show(e.message, 'bad'); }
   });
 
   const qfBtn = document.getElementById('qfUploadBtn');

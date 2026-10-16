@@ -18,7 +18,20 @@ const ALLOWED_EXT = {
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
   webp: 'image/webp',
+  // فایلِ صوتیِ بخشِ لیسنینگِ آزمونِ زبان
+  mp3: 'audio/mpeg',
+  m4a: 'audio/mp4',
+  aac: 'audio/aac',
+  ogg: 'audio/ogg',
+  oga: 'audio/ogg',
+  opus: 'audio/ogg',
+  wav: 'audio/wav',
+  weba: 'audio/webm',
+  webm: 'audio/webm',
 };
+
+/** پسوندهایی که محتوای صوتی دارند (برای پیامِ خطایِ روشن‌تر). */
+const AUDIO_EXT = new Set(['mp3', 'm4a', 'aac', 'ogg', 'oga', 'opus', 'wav', 'weba', 'webm']);
 
 // Executables, scripts, markup, archives and other active formats are refused by name too.
 const DENY_EXT = /\.(exe|dll|bat|cmd|com|scr|msi|msp|ps1|psm1|sh|bash|js|mjs|cjs|vbs|jar|php\d?|py|pl|rb|html?|xhtml|svg|hta|apk|app|bin|dmg|deb|rpm|zip|rar|7z|gz|tar|iso|lnk|docm?|xlsm?|pptm?)$/i;
@@ -28,6 +41,27 @@ function sniffType(buf) {
   if (buf.length >= 8 && buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
   if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
   if (buf.length >= 12 && buf.subarray(0, 4).toString('latin1') === 'RIFF' && buf.subarray(8, 12).toString('latin1') === 'WEBP') return 'image/webp';
+  return sniffAudio(buf);
+}
+
+/**
+ * تشخیصِ فایل‌های صوتی از روی نشانه‌ی ابتدای فایل.
+ * ID3 (MP3)، ftyp/M4A (MP4)، OggS، RIFF/WAVE و EBML (WebM) پوشش داده می‌شوند.
+ */
+function sniffAudio(buf) {
+  if (buf.length < 4) return null;
+  if (buf.subarray(0, 3).toString('latin1') === 'ID3') return 'audio/mpeg';
+  if (buf[0] === 0xff && (buf[1] === 0xfb || buf[1] === 0xf3 || buf[1] === 0xf2)) return 'audio/mpeg';  // MP3 بدون ID3
+  if (buf.length >= 12 && buf.subarray(4, 8).toString('latin1') === 'ftyp') {
+    const brand = buf.subarray(8, 12).toString('latin1');
+    if (['M4A ', 'mp42', 'isom', 'dash', 'qt  '].includes(brand)) return 'audio/mp4';
+    return 'audio/mp4';
+  }
+  if (buf.subarray(0, 4).toString('latin1') === 'OggS') return 'audio/ogg';
+  if (buf.length >= 12
+    && buf.subarray(0, 4).toString('latin1') === 'RIFF'
+    && buf.subarray(8, 12).toString('latin1') === 'WAVE') return 'audio/wav';
+  if (buf.length >= 4 && buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3) return 'audio/webm';
   return null;
 }
 
@@ -57,10 +91,16 @@ function validateUpload({ buffer, originalName, maxBytes = MAX_BYTES }) {
   const name = sanitizeName(originalName);
   if (DENY_EXT.test(name)) throw new AppError(415, 'unsupported_type', 'این نوع فایل مجاز نیست');
   const ext = (path.extname(name).slice(1) || '').toLowerCase();
-  if (!ALLOWED_EXT[ext]) throw new AppError(415, 'unsupported_type', 'فقط PDF، PNG، JPG یا WEBP مجاز است');
+  if (!ALLOWED_EXT[ext]) throw new AppError(415, 'unsupported_type', 'فقط PDF، PNG، JPG، WEBP یا فایل صوتی (MP3/M4A/OGG/WAV) مجاز است');
   if (looksExecutable(buffer)) throw new AppError(415, 'unsupported_type', 'محتوای فایل مجاز نیست');
   const detected = sniffType(buffer);
-  if (!detected || detected !== ALLOWED_EXT[ext]) {
+  // صوت‌ها انواعِ گوناگونی دارند (مثلاً m4a و weba هر دو ذیلِ mp4/webm)؛
+  // برایشان کافی است که محتوا واقعاً صوت باشد.
+  if (AUDIO_EXT.has(ext)) {
+    if (!detected || !detected.startsWith('audio/')) {
+      throw new AppError(415, 'content_mismatch', 'محتوای فایل صوتی نیست');
+    }
+  } else if (!detected || detected !== ALLOWED_EXT[ext]) {
     throw new AppError(415, 'content_mismatch', 'محتوای فایل با پسوند آن مطابقت ندارد');
   }
   if (detected === 'application/pdf' && PDF_ACTIVE.test(buffer.toString('latin1'))) {

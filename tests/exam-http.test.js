@@ -26,6 +26,14 @@ const PNG = () => Buffer.concat([
   Buffer.from([0x0f, 0x67, 0x02, 0xfe]),
   Buffer.from([0x00, 0x00, 0x00, 0x00]), Buffer.from('IEND'), Buffer.from([0xae, 0x42, 0x60, 0x82]),
 ]);
+/** یک MP3 واقعی (تگ ID3 + ۳ فریم MPEG خالی) — برای آزمودنِ فایلِ لیسنینگ. */
+const MP3 = () => {
+  const frame = () => Buffer.concat([Buffer.from([0xff, 0xfb, 0x90, 0x00]), Buffer.alloc(413)]);
+  return Buffer.concat([
+    Buffer.from([0x49, 0x44, 0x33, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+    frame(), frame(), frame(),
+  ]);
+};
 const HOUR = 3600e3;
 
 async function start() {
@@ -630,3 +638,139 @@ test('student can upload several answer-sheet files for one exam', async () => {
 });
 
 void WEBHOOK_SECRET; void SIGNING_KEY; void ADMIN_TG;
+
+// ------------------------------------------- فایل صوتیِ لیسنینگ (فقط انگلیسی)
+
+/** یک آزمونِ «باز» می‌سازد و درسِ داده‌شده را به آن می‌چسباند. */
+function makeOpenExam(db, { title, subjectCode, subjectLabel, durationMinutes = 60 }) {
+  db.prepare("INSERT OR IGNORE INTO academic_years (label, starts_on, ends_on, created_at) VALUES ('1405-1406','2026-09-01','2027-06-30',?)").run(new Date().toISOString());
+  const yearId = db.prepare("SELECT id FROM academic_years WHERE label = '1405-1406'").get().id;
+  const { id } = exams.createExam(db, {
+    title, academicYearId: yearId, durationMinutes, gradeCodes: ['g10'],
+    startsAt: new Date(Date.now() - 30 * 60000).toISOString(),
+    submissionDeadline: new Date(Date.now() + 10 * HOUR).toISOString(),
+    answerKeyPublishAt: new Date(Date.now() + 20 * HOUR).toISOString(),
+    resultsPublishAt: new Date(Date.now() + 30 * HOUR).toISOString(),
+  }, { actor: 'test' });
+  db.prepare('INSERT OR IGNORE INTO subjects (code, label, active) VALUES (?, ?, 1)').run(subjectCode, subjectLabel);
+  const sid = db.prepare('SELECT id FROM subjects WHERE code = ?').get(subjectCode).id;
+  db.prepare('DELETE FROM exam_subjects WHERE exam_id = ?').run(id);
+  db.prepare('INSERT INTO exam_subjects (exam_id, subject_id) VALUES (?, ?)').run(id, sid);
+  // برای انتشار باید «فایل سؤالات + تعداد سؤالات» داشته باشد (شیوه‌ی جدید)
+  db.prepare(`INSERT OR REPLACE INTO exam_question_files
+              (exam_id, original_name, mime_type, size_bytes, sha256, storage_name, uploaded_at)
+              VALUES (?, 'q.pdf', 'application/pdf', ?, 'deadbeef', 'q.bin', ?)`)
+    .run(id, PDF().length, new Date().toISOString());
+  db.prepare('UPDATE exams SET question_count = 5 WHERE id = ?').run(id);
+  // و پاسخنامه‌ی رسمی
+  db.prepare(`INSERT OR REPLACE INTO answer_keys
+              (exam_id, original_name, mime_type, size_bytes, sha256, storage_name, uploaded_at)
+              VALUES (?, 'k.pdf', 'application/pdf', ?, 'cafe', 'k.bin', ?)`)
+    .run(id, PDF().length, new Date().toISOString());
+  exams.transition(db, id, 'published', { actor: 'admin' });
+  return id;
+}
+
+test('allowedUntil پایانِ مدتِ آزمون است، نه مهلتِ ارسال', () => {
+  const base = { starts_at: '2026-10-16T08:00:00.000Z', duration_minutes: 60, submission_deadline: '2026-10-17T08:00:00.000Z' };
+  // حالت عادی: شروع + مدت
+  assert.equal(exams.allowedUntil(base), '2026-10-16T09:00:00.000Z');
+  // اگر مدت از مهلتِ ارسال فراتر رود، به مهلتِ ارسال محدود می‌شود
+  const long = { ...base, duration_minutes: 600, submission_deadline: '2026-10-16T10:00:00.000Z' };
+  assert.equal(exams.allowedUntil(long), '2026-10-16T10:00:00.000Z');
+});
+
+test('admin می‌تواند فایل صوتیِ لیسنینگِ آزمونِ انگلیسی را بارگذاری کند', async () => {
+  const s = await start();
+  const cookie = await adminCookie(s);
+  const id = makeOpenExam(s.db, { title: 'آزمون انگلیسی', subjectCode: 'en', subjectLabel: 'زبان انگلیسی' });
+
+  // جزئیاتِ آزمون باید «انگلیسی بودن» را اعلام کند
+  let d = await req(s, 'GET', `/api/admin/exams/${id}`, { cookie });
+  assert.equal(d.data.hasEnglish, true, 'باید انگلیسی تشخیص داده شود');
+  assert.equal(d.data.hasAudioFile, false);
+
+  const up = await req(s, 'POST', `/api/admin/exams/${id}/audio`, { cookie, form: form(MP3(), 'listening.mp3', 'audio/mpeg') });
+  assert.equal(up.status, 201, JSON.stringify(up.data));
+  assert.equal(up.data.original_name, 'listening.mp3');
+
+  d = await req(s, 'GET', `/api/admin/exams/${id}`, { cookie });
+  assert.equal(d.data.hasAudioFile, true);
+  assert.equal(d.data.audioFile.original_name, 'listening.mp3');
+
+  // فایل قابل دریافت و بایت‌به‌بایت برابر با اصل است
+  const raw = await fetch(`${s.base}/api/admin/exams/${id}/audio`, { headers: { cookie } });
+  assert.equal(raw.status, 200);
+  assert.match(raw.headers.get('content-type'), /^audio\//);
+  assert.ok(Buffer.from(await raw.arrayBuffer()).equals(MP3()));
+
+  // حذف
+  const del = await req(s, 'DELETE', `/api/admin/exams/${id}/audio`, { cookie });
+  assert.equal(del.status, 200);
+  d = await req(s, 'GET', `/api/admin/exams/${id}`, { cookie });
+  assert.equal(d.data.hasAudioFile, false);
+  await s.close();
+});
+
+test('فایل صوتی فقط برای آزمونِ انگلیسی پذیرفته می‌شود', async () => {
+  const s = await start();
+  const cookie = await adminCookie(s);
+  const id = makeOpenExam(s.db, { title: 'آزمون زیست', subjectCode: 'bio', subjectLabel: 'زیست‌شناسی' });
+  const d = await req(s, 'GET', `/api/admin/exams/${id}`, { cookie });
+  assert.equal(d.data.hasEnglish, false);
+
+  const r = await req(s, 'POST', `/api/admin/exams/${id}/audio`, { cookie, form: form(MP3(), 'l.mp3', 'audio/mpeg') });
+  assert.equal(r.status, 409);
+  assert.equal(r.data.error.code, 'not_english_exam');
+  await s.close();
+});
+
+test('فایلِ غیرصوتی با پسوندِ mp3 رد می‌شود', async () => {
+  const s = await start();
+  const cookie = await adminCookie(s);
+  const id = makeOpenExam(s.db, { title: 'آزمون انگلیسی', subjectCode: 'en', subjectLabel: 'زبان انگلیسی' });
+  const r = await req(s, 'POST', `/api/admin/exams/${id}/audio`, { cookie, form: form(PDF(), 'fake.mp3', 'audio/mpeg') });
+  assert.equal(r.status, 415);
+  assert.equal(r.data.error.code, 'content_mismatch');
+  await s.close();
+});
+
+test('دانش‌آموز قبل از شروعِ آزمون به فایل صوتی دسترسی ندارد', async () => {
+  const s = await start();
+  const admin = await adminCookie(s);
+  const id = makeOpenExam(s.db, { title: 'آزمون انگلیسی', subjectCode: 'en', subjectLabel: 'زبان انگلیسی' });
+  await req(s, 'POST', `/api/admin/exams/${id}/audio`, { cookie: admin, form: form(MP3(), 'l.mp3', 'audio/mpeg') });
+  // آزمون را به آینده برگردان
+  s.db.prepare('UPDATE exams SET starts_at = ? WHERE id = ?').run(new Date(Date.now() + 2 * HOUR).toISOString(), id);
+
+  addStudent(s.db, 'stu_l');
+  const { cookie } = await login(s, 'stu_l', 'StudentPass1');
+  const r = await req(s, 'GET', `/api/student/exams/${id}/audio`, { cookie });
+  assert.equal(r.status, 409);
+  assert.equal(r.data.error.code, 'not_started');
+  await s.close();
+});
+
+test('دانش‌آموز در فهرستش allowedUntil و hasAudio را می‌بیند و صوت را دریافت می‌کند', async () => {
+  const s = await start();
+  const admin = await adminCookie(s);
+  const id = makeOpenExam(s.db, { title: 'آزمون انگلیسی', subjectCode: 'en', subjectLabel: 'زبان انگلیسی', durationMinutes: 90 });
+  const up = await req(s, 'POST', `/api/admin/exams/${id}/audio`, { cookie: admin, form: form(MP3(), 'l.mp3', 'audio/mpeg') });
+  assert.equal(up.status, 201, JSON.stringify(up.data));
+
+  addStudent(s.db, 'stu_l');
+  const { cookie } = await login(s, 'stu_l', 'StudentPass1');
+  const list = await req(s, 'GET', '/api/student/exams', { cookie });
+  const row = list.data.exams.find((e) => e.id === id);
+  assert.ok(row, 'آزمون در فهرستِ دانش‌آموز است');
+  assert.equal(row.hasAudio, true, 'باید نشانِ صوت داشته باشد');
+  assert.equal(row.duration_minutes, 90, 'مدت باید در خروجی باشد');
+  // allowedUntil باید ≈ شروع + ۹۰ دقیقه باشد، نه مهلتِ ارسال
+  const delta = new Date(row.allowedUntil) - new Date(row.starts_at);
+  assert.equal(Math.round(delta / 60000), 90, 'allowedUntil باید بر اساسِ مدت باشد');
+
+  const raw = await fetch(`${s.base}/api/student/exams/${id}/audio`, { headers: { cookie } });
+  assert.equal(raw.status, 200);
+  assert.ok(Buffer.from(await raw.arrayBuffer()).equals(MP3()));
+  await s.close();
+});
