@@ -82,6 +82,11 @@ function createExam(db, input, { now = new Date(), actor = 'admin' } = {}) {
  *
  * @returns {string|null} ISO یا null اگر زمانِ شروع معلوم نباشد
  */
+/**
+ * پایانِ «پنجره‌ی کلیِ» آزمون — برای نمایِ ادمین.
+ * هشدار: این برای شمارش معکوسِ دانش‌آموز نیست؛ هر دانش‌آموز ساعتِ خودش را دارد
+ * (نگاه کن به attemptEndsAt).
+ */
 function allowedUntil(exam) {
   if (!exam || !exam.starts_at) return null;
   const start = new Date(exam.starts_at).getTime();
@@ -90,6 +95,53 @@ function allowedUntil(exam) {
   const deadline = exam.submission_deadline ? new Date(exam.submission_deadline).getTime() : Infinity;
   const ms = Math.min(byDuration, Number.isNaN(deadline) ? byDuration : deadline);
   return new Date(ms).toISOString();
+}
+
+/** ساعتِ شروعِ یک دانش‌آموز؛ اگر هنوز وارد نشده، null. */
+function attemptStartedAt(db, examId, studentId) {
+  const row = db.prepare('SELECT started_at FROM exam_attempts WHERE exam_id = ? AND student_id = ?')
+    .get(examId, studentId);
+  return row ? row.started_at : null;
+}
+
+/**
+ * ثبتِ ورودِ دانش‌آموز به آزمون. فقط نخستین بار اثر دارد —
+ * بستن و باز کردنِ دوباره‌ی صفحه ساعت را از نو نمی‌کند.
+ * @returns {{startedAt:string, endsAt:string|null, alreadyStarted:boolean}}
+ */
+function startAttempt(db, examId, studentId, { now = new Date() } = {}) {
+  const existing = attemptStartedAt(db, examId, studentId);
+  if (existing) {
+    return { startedAt: existing, endsAt: attemptEndsAt(db, examId, studentId), alreadyStarted: true };
+  }
+  const startedAt = new Date(now).toISOString();
+  db.prepare('INSERT OR IGNORE INTO exam_attempts (exam_id, student_id, started_at) VALUES (?, ?, ?)')
+    .run(examId, studentId, startedAt);
+  return { startedAt, endsAt: attemptEndsAt(db, examId, studentId), alreadyStarted: false };
+}
+
+/**
+ * پایانِ آزمون برای «این» دانش‌آموز:
+ *   کمینه‌ی (لحظه‌ی ورودش + مدتِ آزمون) و مهلتِ ارسال.
+ * اگر هنوز وارد نشده باشد null برمی‌گرداند — یعنی هنوز می‌تواند شروع کند،
+ * حتی اگر دیگران مدت‌ها پیش تمام کرده باشند.
+ */
+function attemptEndsAt(db, examId, studentId) {
+  const exam = getExam(db, examId);
+  const startedAt = attemptStartedAt(db, examId, studentId);
+  if (!exam || !startedAt) return null;
+  const start = new Date(startedAt).getTime();
+  const byDuration = start + (Number(exam.duration_minutes) || 0) * 60000;
+  const deadline = exam.submission_deadline ? new Date(exam.submission_deadline).getTime() : Infinity;
+  const ms = Math.min(byDuration, Number.isNaN(deadline) ? byDuration : deadline);
+  return new Date(ms).toISOString();
+}
+
+/** آیا وقتِ این دانش‌آموز تمام شده است؟ (وارد نشده = تمام نشده) */
+function attemptExpired(db, examId, studentId, { now = new Date() } = {}) {
+  const endsAt = attemptEndsAt(db, examId, studentId);
+  if (!endsAt) return false;
+  return new Date(now).getTime() >= new Date(endsAt).getTime();
 }
 
 /**
@@ -412,4 +464,5 @@ function isEligible(db, examId, studentId) {
 module.exports = {
   TRANSITIONS, createExam, addQuestion, publicationProblems, transition, updateSchedule,
   recordSubmission, isEligible, getExam, touchExam, updateExam, deleteExam, allowedUntil,
+  startAttempt, attemptEndsAt, attemptStartedAt, attemptExpired,
 };

@@ -508,7 +508,9 @@ function mountExamRoutes(app, { db, config, log = console, triggerOutbox = () =>
           windowState: home.windowState(r, now),
           countdownTarget: home.countdownTarget(r, now).target,
           // پایانِ «مدتِ آزمون» (نه مهلتِ ارسال) — شمارش معکوسِ صفحه‌ی آزمون
-          allowedUntil: exams.allowedUntil(r),
+          // پایانِ آزمون برای «این» دانش‌آموز — اگر هنوز وارد نشده، null است
+          endsAt: exams.attemptEndsAt(db, r.id, req.auth.id),
+          startedAt: exams.attemptStartedAt(db, r.id, req.auth.id),
           hasAudio: Boolean(db.prepare('SELECT 1 FROM exam_audio_files WHERE exam_id = ?').get(r.id)),
           audioUrl: (db.prepare('SELECT audio_url FROM exam_audio_files WHERE exam_id = ?').get(r.id) || {}).audio_url || null,
         })),
@@ -521,10 +523,28 @@ function mountExamRoutes(app, { db, config, log = console, triggerOutbox = () =>
     if (now < new Date(exam.starts_at)) throw conflict('not_started', 'آزمون هنوز شروع نشده است');
     if (now >= new Date(exam.submission_deadline)) throw conflict('deadline_passed', 'مهلت ارسال پاسخ به پایان رسیده است');
     if (!exams.isEligible(db, examId, studentId)) throw notFound('آزمون یافت نشد');
+    // مدتِ این دانش‌آموز از لحظه‌ی ورودِ خودش حساب می‌شود — نه زمانِ شروعِ کلیِ آزمون
+    if (exams.attemptExpired(db, examId, studentId, { now })) {
+      throw conflict('time_over', 'مدت زمان مجاز آزمون به اتمام رسیده است');
+    }
     const sub = db.prepare('SELECT id FROM submissions WHERE exam_id = ? AND student_id = ?').get(examId, studentId);
     if (sub) throw conflict('already_submitted', 'برای این آزمون قبلاً پاسخ ثبت شده است');
     return exam;
   }
+
+  // ثبتِ لحظه‌ی ورودِ دانش‌آموز: از این لحظه مدتِ آزمون برای «او» شروع می‌شود.
+  // فراخوانیِ دوباره ساعت را reset نمی‌کند.
+  app.post('/api/student/exams/:id/start', studentOnly, safeRoute((req, res) => {
+    const examId = idParam(req.params.id);
+    const now = new Date();
+    const exam = exams.getExam(db, examId);
+    if (!['published', 'in_progress'].includes(exam.status)) throw conflict('exam_not_open', 'آزمون باز نیست');
+    if (now < new Date(exam.starts_at)) throw conflict('not_started', 'آزمون هنوز شروع نشده است');
+    if (now >= new Date(exam.submission_deadline)) throw conflict('deadline_passed', 'مهلت ارسال پاسخ به پایان رسیده است');
+    if (!exams.isEligible(db, examId, req.auth.id)) throw notFound('آزمون یافت نشد');
+    const att = exams.startAttempt(db, examId, req.auth.id, { now });
+    res.json({ startedAt: att.startedAt, endsAt: att.endsAt, alreadyStarted: att.alreadyStarted });
+  }));
 
   app.get('/api/student/exams/:id/uploads', studentOnly, safeRoute((req, res) => {
     const examId = idParam(req.params.id);

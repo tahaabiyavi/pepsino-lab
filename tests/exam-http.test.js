@@ -35,6 +35,8 @@ const MP3 = () => {
   ]);
 };
 const HOUR = 3600e3;
+const wait20 = () => new Promise((r) => setTimeout(r, 20));
+const dbStudentId = (db, u) => db.prepare('SELECT id FROM students WHERE username = ?').get(u).id;
 
 async function start() {
   const db = makeDb();
@@ -751,7 +753,7 @@ test('دانش‌آموز قبل از شروعِ آزمون به فایل صوت
   await s.close();
 });
 
-test('دانش‌آموز در فهرستش allowedUntil و hasAudio را می‌بیند و صوت را دریافت می‌کند', async () => {
+test('دانش‌آموز در فهرستش hasAudio و پایانِ شخصیِ خودش را می‌بیند و صوت را دریافت می‌کند', async () => {
   const s = await start();
   const admin = await adminCookie(s);
   const id = makeOpenExam(s.db, { title: 'آزمون انگلیسی', subjectCode: 'en', subjectLabel: 'زبان انگلیسی', durationMinutes: 90 });
@@ -766,9 +768,14 @@ test('دانش‌آموز در فهرستش allowedUntil و hasAudio را می�
   assert.ok(row, 'آزمون در فهرستِ دانش‌آموز است');
   assert.equal(row.hasAudio, true, 'باید نشانِ صوت داشته باشد');
   assert.equal(row.duration_minutes, 90, 'مدت باید در خروجی باشد');
-  // allowedUntil باید ≈ شروع + ۹۰ دقیقه باشد، نه مهلتِ ارسال
-  const delta = new Date(row.allowedUntil) - new Date(row.starts_at);
-  assert.equal(Math.round(delta / 60000), 90, 'allowedUntil باید بر اساسِ مدت باشد');
+  // پیش از ورود هیچ ساعتی برای او ثبت نشده است
+  assert.equal(row.endsAt, null, 'پیش از ورود نباید پایانی داشته باشد');
+  assert.equal(row.startedAt, null);
+  // پس از ورود: فاصله‌ی شروع تا پایان برابرِ مدتِ آزمون (۹۰ دقیقه) است
+  const st = await req(s, 'POST', `/api/student/exams/${id}/start`, { cookie, json: {} });
+  assert.equal(st.status, 200);
+  const delta = new Date(st.data.endsAt) - new Date(st.data.startedAt);
+  assert.equal(Math.round(delta / 60000), 90, 'مدت باید بر اساسِ لحظه‌ی ورودِ خودش باشد');
 
   const raw = await fetch(`${s.base}/api/student/exams/${id}/audio`, { headers: { cookie } });
   assert.equal(raw.status, 200);
@@ -830,5 +837,75 @@ test('لینکِ صوتی هم فقط برای آزمونِ انگلیسی اس�
   assert.equal(info.data.source, 'link');
   assert.equal(info.data.kind, 'direct');
   assert.equal(info.data.url, 'https://host.test/sound.mp3');
+  await s.close();
+});
+
+// ------------------------------------- مدتِ آزمون: برای هر دانش‌آموز جداگانه
+
+test('مدتِ آزمون از لحظه‌ی ورودِ هر دانش‌آموز حساب می‌شود، نه شروعِ کلی', async () => {
+  const s = await start();
+  const admin = await adminCookie(s);
+  const id = makeOpenExam(s.db, { title: 'آزمون انگلیسی', subjectCode: 'en', subjectLabel: 'زبان انگلیسی', durationMinutes: 120 });
+
+  addStudent(s.db, 'stu_a'); addStudent(s.db, 'stu_b');
+  const A = await login(s, 'stu_a', 'StudentPass1');
+  const B = await login(s, 'stu_b', 'StudentPass1');
+
+  // پیش از ورود: هیچ ساعتی ثبت نشده و وقتش تمام نشده است
+  assert.equal(exams.attemptEndsAt(s.db, id, 1), null);
+  assert.equal(exams.attemptExpired(s.db, id, 1), false);
+
+  const a1 = await req(s, 'POST', `/api/student/exams/${id}/start`, { cookie: A.cookie, json: {} });
+  assert.equal(a1.status, 200);
+  assert.ok(a1.data.endsAt, 'باید پایانِ شخصی برگردد');
+  assert.equal(a1.data.alreadyStarted, false);
+
+  // ورودِ دوباره ساعت را از نو نمی‌کند
+  await wait20();
+  const a2 = await req(s, 'POST', `/api/student/exams/${id}/start`, { cookie: A.cookie, json: {} });
+  assert.equal(a2.data.alreadyStarted, true);
+  assert.equal(a2.data.startedAt, a1.data.startedAt, 'ساعتِ شروع نباید عوض شود');
+  assert.equal(a2.data.endsAt, a1.data.endsAt, 'پایان نباید عوض شود');
+
+  // دانش‌آموزِ دوم دیرتر می‌آید → پایانِ متفاوتِ خودش را دارد
+  await wait20();
+  const b1 = await req(s, 'POST', `/api/student/exams/${id}/start`, { cookie: B.cookie, json: {} });
+  assert.equal(b1.status, 200);
+  assert.notEqual(b1.data.endsAt, a1.data.endsAt, 'هر دانش‌آموز پایانِ خودش را دارد');
+
+  // فاصله‌یِ پایانِ هر کس با شروعش برابرِ مدتِ آزمون است
+  const durA = new Date(a1.data.endsAt) - new Date(a1.data.startedAt);
+  assert.equal(Math.round(durA / 60000), 120, 'مدت باید ۱۲۰ دقیقه باشد');
+
+  // هر کس در فهرستِ خودش پایانِ خودش را می‌بیند
+  const la = await req(s, 'GET', '/api/student/exams', { cookie: A.cookie });
+  const rowA = la.data.exams.find((e) => e.id === id);
+  assert.equal(rowA.endsAt, a1.data.endsAt);
+  await s.close();
+});
+
+test('پس از پایانِ مدتِ شخصی، آپلود از سمتِ سرور رد می‌شود', async () => {
+  const s = await start();
+  const admin = await adminCookie(s);
+  const id = makeOpenExam(s.db, { title: 'آزمون انگلیسی', subjectCode: 'en', subjectLabel: 'زبان انگلیسی', durationMinutes: 120 });
+  addStudent(s.db, 'stu_a');
+  const { cookie } = await login(s, 'stu_a', 'StudentPass1');
+  const st = await req(s, 'POST', `/api/student/exams/${id}/start`, { cookie, json: {} });
+  assert.equal(st.status, 200);
+
+  // وقتِ او را دستی به گذشته ببریم (انگار ۱۲۰ دقیقه گذشته است)
+  s.db.prepare('UPDATE exam_attempts SET started_at = ? WHERE exam_id = ? AND student_id = (SELECT id FROM students WHERE username = ?)')
+    .run(new Date(Date.now() - 130 * 60000).toISOString(), id, 'stu_a');
+  assert.equal(exams.attemptExpired(s.db, id, dbStudentId(s.db, 'stu_a')), true);
+
+  const up = await req(s, 'POST', `/api/student/exams/${id}/uploads`, { cookie, form: form(PDF(), 'answer.pdf') });
+  assert.equal(up.status, 409, JSON.stringify(up.data));
+  assert.equal(up.data.error.code, 'time_over');
+
+  // اما کسی که اصلاً وارد نشده، هنوز می‌تواند آپلود کند
+  addStudent(s.db, 'stu_b');
+  const B = await login(s, 'stu_b', 'StudentPass1');
+  const up2 = await req(s, 'POST', `/api/student/exams/${id}/uploads`, { cookie: B.cookie, form: form(PDF(), 'answer.pdf') });
+  assert.equal(up2.status, 201, JSON.stringify(up2.data));
   await s.close();
 });

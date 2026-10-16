@@ -118,19 +118,23 @@ async function openExamDetail(examId, opts) {
   const showQuestions = now >= new Date(ex.starts_at || 0);
 
   /**
-   * پایانِ «مدتِ آزمون» — نه مهلتِ ارسال. دانش‌آموز فقط به اندازه‌ی
-   * duration_minutes وقت دارد؛ وقتی این زمان تمام شود از آزمون بیرون می‌رود.
+   * مدتِ آزمون برای «این» دانش‌آموز، از لحظه‌ای که خودش وارد شده حساب می‌شود.
+   * اگر هنوز وارد نشده باشد، سرور ساعتی ثبت نکرده و او هر وقت بیاید
+   * مدتِ کامل را خواهد داشت — حتی اگر دیگران تمام کرده باشند.
    */
-  const allowedUntilIso = ex.allowedUntil
-    || (ex.starts_at
-      ? new Date(Math.min(
-        new Date(ex.starts_at).getTime() + (Number(ex.duration_minutes) || 0) * 60000,
-        new Date(ex.submission_deadline || Infinity).getTime(),
-      )).toISOString()
-      : null);
-  const allowedMs = allowedUntilIso ? new Date(allowedUntilIso) - now : 0;
-  const timeOver = Boolean(allowedUntilIso) && allowedMs <= 0 && showQuestions;
-  // وقتی وقت تمام شده، دیگر اجازه‌ی آپلود نیست
+  let myEndsAt = ex.endsAt || null;
+  if (showQuestions && canUpload && !practice) {
+    try {
+      const st = await API.post(`/api/student/exams/${examId}/start`, {});
+      myEndsAt = st.endsAt || myEndsAt;
+      const found = MY_EXAMS.find((e) => e.id === Number(examId));
+      if (found) { found.endsAt = st.endsAt; found.startedAt = st.startedAt; }
+    } catch (e) { /* آزمون بسته یا ثبت‌شده — همان مقدارِ موجود کافی است */ }
+  }
+  const allowedMs = myEndsAt ? new Date(myEndsAt) - now : 0;
+  const timeOver = Boolean(myEndsAt) && allowedMs <= 0;
+  // وقتی وقتِ خودش تمام شده، دیگر اجازه‌ی آپلود نیست
+  // (اگر ثبتِ شروع به هر دلیلی ناموفق بود، راهِ آپلود را نمی‌بندیم)
   const mayUpload = canUpload && !timeOver;
 
   let uploads = [];
