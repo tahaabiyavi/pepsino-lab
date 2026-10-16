@@ -106,6 +106,15 @@ async function openExamDetail(examId, opts) {
   const open = ['published', 'in_progress'].includes(ex.status) && now < new Date(ex.submission_deadline) && !ex.my_status;
   const canUpload = open && !practice;
 
+  // اگر صوت به‌صورت پیوندِ خارجی ثبت شده، نوعش را بپرس تا درست نمایش داده شود
+  let AUDIO_KIND = null;
+  if (ex.hasAudio && ex.audioUrl) {
+    try {
+      const info = await API.get(`/api/student/exams/${examId}/audio`);
+      if (info && info.kind) { AUDIO_KIND = info.kind; if (info.url) ex.audioUrl = info.url; }
+    } catch (e) { AUDIO_KIND = 'page'; }
+  }
+
   const showQuestions = now >= new Date(ex.starts_at || 0);
 
   /**
@@ -155,12 +164,24 @@ async function openExamDetail(examId, opts) {
         <div class="row wrap-r">
           <b>🎧 بخش لیسنینگ</b>
           <span class="spacer"></span>
-          <a class="btn sm ghost" href="/api/student/exams/${examId}/audio" download>دانلود فایل صوتی</a>
+          ${ex.audioUrl
+            ? `<a class="btn sm ghost" href="${esc(ex.audioUrl)}" target="_blank" rel="noopener">باز کردن در تب جدید</a>`
+            : `<a class="btn sm ghost" href="/api/student/exams/${examId}/audio" download>دانلود فایل صوتی</a>`}
         </div>
         <p class="small muted" style="margin-top:4px">فایل صوتی را پخش کنید و هم‌زمان به سؤالات پاسخ دهید.</p>
-        <audio id="listeningAudio" controls preload="metadata"
-               src="/api/student/exams/${examId}/audio"
-               style="width:100%;margin-top:8px"></audio>
+        ${ex.audioUrl
+          ? (AUDIO_KIND === 'embed'
+              ? `<iframe id="listeningFrame" src="${esc(ex.audioUrl)}" title="فایل صوتی لیسنینگ"
+                         style="width:100%;height:220px;border:0;border-radius:8px;margin-top:8px"
+                         allow="autoplay; encrypted-media" allowfullscreen></iframe>`
+              : AUDIO_KIND === 'page'
+                ? `<iframe id="listeningFrame" src="${esc(ex.audioUrl)}" title="فایل صوتی لیسنینگ"
+                           style="width:100%;height:260px;border:0;border-radius:8px;margin-top:8px"></iframe>`
+                : `<audio id="listeningAudio" controls preload="metadata" src="${esc(ex.audioUrl)}"
+                         style="width:100%;margin-top:8px"></audio>`)
+          : `<audio id="listeningAudio" controls preload="metadata"
+                    src="/api/student/exams/${examId}/audio"
+                    style="width:100%;margin-top:8px"></audio>`}
       </div>
     ` : ''}
 

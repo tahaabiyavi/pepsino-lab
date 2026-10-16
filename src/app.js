@@ -57,7 +57,11 @@ function createApp({ db, config, telegram, log = console, logger = null }) {
       useDefaults: true,
       directives: {
         'default-src': ["'self'"],
-        'img-src': ["'self'", 'data:', 'blob:'],
+        'img-src': ["'self'", 'data:', 'blob:', 'https:'],
+        // فایلِ لیسنینگ می‌تواند پیوندی به یک میزبانِ خارجی باشد؛
+        // بدون این دو خط، مرورگر آن را مسدود می‌کند.
+        'media-src': ["'self'", 'https:', 'blob:', 'data:'],
+        'frame-src': ["'self'", 'https:'],
         'style-src': ["'self'", "'unsafe-inline'"],
         'script-src': ["'self'"],
         'connect-src': ["'self'"],

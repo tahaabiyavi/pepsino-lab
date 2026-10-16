@@ -300,27 +300,56 @@ function renderExamDetail(data, examId) {
     <div class="panel soft" style="margin-top:16px">
       <h3>🎧 فایل صوتیِ لیسنینگ (ویژهٔ زبان انگلیسی)</h3>
       ${data.hasEnglish ? `
-        <p class="hint">فایل صوتیِ بخشِ لیسنینگ. دانش‌آموز هنگامِ آزمون آن را در همان صفحه پخش می‌کند.</p>
-        ${data.hasAudioFile
-    ? `<p class="small">فایل فعلی: <b>${esc(data.audioFile.original_name)}</b> (${fmtBytes(data.audioFile.size_bytes)})</p>
-             <audio controls preload="metadata" src="/api/admin/exams/${examId}/audio" style="width:100%;margin:8px 0"></audio>
-             <div class="row wrap-r">
-               <a class="btn sm ghost" href="/api/admin/exams/${examId}/audio" target="_blank">دانلود</a>
-               ${exam.status !== 'archived' ? '<button class="btn sm danger" id="audioDelBtn">حذف فایل صوتی</button>' : ''}
-             </div>`
-    : '<p class="small muted">هنوز فایل صوتی بارگذاری نشده است.</p>'}
-        ${exam.status !== 'archived' ? `
-          <div class="field" style="margin-top:10px">
-            <label>${data.hasAudioFile ? 'جایگزینی فایل صوتی' : 'انتخاب فایل صوتی'} (MP3، M4A، OGG یا WAV — حداکثر ۲۰ مگابایت)</label>
-            <input type="file" id="audioFile" accept="audio/*,.mp3,.m4a,.aac,.ogg,.oga,.opus,.wav,.weba">
+        <p class="hint">فایل صوتی را در یک سایتِ آپلود بارگذاری کنید و لینکش را اینجا بگذارید؛
+        دانش‌آموز هنگامِ آزمون آن را در همان صفحه می‌شنود.</p>
+
+        <div class="field" style="margin-top:10px">
+          <label>لینکِ فایل صوتی</label>
+          <input type="url" id="audioUrl" dir="ltr" placeholder="https://example.com/listening.mp3"
+                 value="${esc(data.audioUrl || '')}"
+                 style="width:100%;padding:8px;border:1px solid var(--line,#ddd);border-radius:8px">
+          <p class="hint2">لینکِ مستقیمِ فایل (mp3/m4a/ogg/wav) یا لینکِ صفحه‌ی آپارات/یوتیوب — هر دو پشتیبانی می‌شود.</p>
+        </div>
+        <button class="btn sm primary" id="audioUrlBtn" style="margin-top:8px">ذخیرهٔ لینک</button>
+
+        ${data.audioUrl ? `
+          <div class="card soft" style="margin-top:12px">
+            <p class="small">لینکِ فعلی: <b dir="ltr">${esc(data.audioUrl)}</b></p>
+            ${data.audioKind === 'embed'
+              ? `<iframe src="${esc(data.audioUrl)}" style="width:100%;height:220px;border:0;border-radius:8px" allowfullscreen title="پیش‌نمایش صوت"></iframe>`
+              : data.audioKind === 'direct'
+                ? `<audio controls preload="metadata" src="${esc(data.audioUrl)}" style="width:100%;margin-top:8px"></audio>`
+                : `<a class="btn sm ghost" href="${esc(data.audioUrl)}" target="_blank" rel="noopener">باز کردن لینک</a>`}
+            <div class="row wrap-r" style="margin-top:8px">
+              ${exam.status !== 'archived' ? '<button class="btn sm danger" id="audioDelBtn">حذف صوت</button>' : ''}
+            </div>
           </div>
-          <button class="btn sm primary" id="audioUploadBtn" style="margin-top:8px">بارگذاری فایل صوتی</button>
+        ` : (data.hasAudioFile ? `
+          <div class="card soft" style="margin-top:12px">
+            <p class="small">فایلِ بارگذاری‌شده روی سرور: <b>${esc(data.audioFile.original_name)}</b> (${fmtBytes(data.audioFile.size_bytes)})</p>
+            <audio controls preload="metadata" src="/api/admin/exams/${examId}/audio" style="width:100%;margin:8px 0"></audio>
+            <div class="row wrap-r">
+              <a class="btn sm ghost" href="/api/admin/exams/${examId}/audio" target="_blank">دانلود</a>
+              ${exam.status !== 'archived' ? '<button class="btn sm danger" id="audioDelBtn">حذف صوت</button>' : ''}
+            </div>
+          </div>
+        ` : '<p class="small muted" style="margin-top:10px">هنوز صوتی برای این آزمون ثبت نشده است.</p>')}
+
+        ${exam.status !== 'archived' ? `
+          <details style="margin-top:12px">
+            <summary class="small muted">بارگذاریِ مستقیمِ فایل روی سرور (در صورت بروز مشکل)</summary>
+            <div class="field" style="margin-top:8px">
+              <label>انتخاب فایل صوتی (MP3، M4A، OGG یا WAV — حداکثر ۲۰ مگابایت)</label>
+              <input type="file" id="audioFile" accept="audio/*,.mp3,.m4a,.aac,.ogg,.oga,.opus,.wav,.weba">
+            </div>
+            <button class="btn sm" id="audioUploadBtn" style="margin-top:8px">بارگذاری فایل</button>
+          </details>
         ` : ''}
       ` : `
         <p class="small muted">این آزمون درسِ «زبان انگلیسی» ندارد، پس بخشِ لیسنینگ برایش معنا ندارد.</p>
         <p class="small muted">درس‌های این آزمون: ${(data.subjects || []).map((s) => esc(s.label)).join('، ') || '—'}</p>
       `}
-    </div>
+
 
     <div class="panel soft" style="margin-top:16px">
       <h3>وضعیت دانش‌آموزان</h3>
@@ -447,6 +476,17 @@ function renderExamDetail(data, examId) {
   });
 
   // ---- فایل صوتیِ لیسنینگ (فقط آزمونِ زبان انگلیسی) ----
+  const audioUrlBtn = document.getElementById('audioUrlBtn');
+  if (audioUrlBtn) audioUrlBtn.addEventListener('click', async () => {
+    const url = (document.getElementById('audioUrl').value || '').trim();
+    if (!url) { Toast.show('لینکِ فایل صوتی را وارد کنید', 'bad'); return; }
+    try {
+      const r = await API.put(`/api/admin/exams/${examId}/audio-url`, { url });
+      Toast.show(`لینک ذخیره شد (${r.host || 'خارجی'})`, 'good');
+      openExamDetail(examId);
+    } catch (e) { Toast.show(e.message, 'bad'); }
+  });
+
   const audioUp = document.getElementById('audioUploadBtn');
   if (audioUp) audioUp.addEventListener('click', async () => {
     const file = document.getElementById('audioFile').files[0];

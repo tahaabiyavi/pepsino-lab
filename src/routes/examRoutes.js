@@ -9,6 +9,7 @@ const { requireRole } = require('../middleware/security');
 const { AppError, badRequest, forbidden, notFound, conflict } = require('../services/errors');
 const { recordAudit } = require('../services/audit');
 const exams = require('../services/exams');
+const { classifyAudioUrl } = require('../services/audioLink');
 const home = require('../services/home');
 const grading = require('../services/grading');
 const { createGraderAccount, setGraderActive, updateStudent, issuePasswordReset } = require('../services/accounts');
@@ -76,7 +77,8 @@ function mountExamRoutes(app, { db, config, log = console, triggerOutbox = () =>
     ).all(id).map((q) => ({ ...q, max_mark: formatQuarters(q.max_quarters) }));
     const hasKey = db.prepare('SELECT COUNT(*) n FROM answer_keys WHERE exam_id = ?').get(id).n > 0;
     const qFile = db.prepare('SELECT original_name, size_bytes, uploaded_at FROM exam_question_files WHERE exam_id = ?').get(id);
-    const aFile = db.prepare('SELECT original_name, mime_type, size_bytes, uploaded_at FROM exam_audio_files WHERE exam_id = ?').get(id);
+    const aFile = db.prepare('SELECT original_name, mime_type, size_bytes, uploaded_at, audio_url FROM exam_audio_files WHERE exam_id = ?').get(id);
+    const aInfo = aFile && aFile.audio_url ? classifyAudioUrl(aFile.audio_url) : null;
     const subjects = db.prepare(
       `SELECT s.id, s.code, s.label FROM exam_subjects es JOIN subjects s ON s.id = es.subject_id
         WHERE es.exam_id = ? ORDER BY s.id`,
@@ -91,6 +93,8 @@ function mountExamRoutes(app, { db, config, log = console, triggerOutbox = () =>
       hasEnglish: hasEnglish(db, id),
       hasAudioFile: Boolean(aFile),
       audioFile: aFile || null,
+      audioUrl: aFile && aFile.audio_url ? aFile.audio_url : null,
+      audioKind: aInfo ? aInfo.kind : (aFile ? 'direct' : null),
       subjects,
       publicationProblems: exams.publicationProblems(db, id),
     });
@@ -256,10 +260,35 @@ function mountExamRoutes(app, { db, config, log = console, triggerOutbox = () =>
     res.json({ ok: true });
   }));
 
+  // ذخیره‌ی پیوندِ صوتیِ خارجی (به‌جای بارگذاریِ فایل روی سرور)
+  app.put('/api/admin/exams/:id/audio-url', adminOnly, safeRoute((req, res) => {
+    const id = idParam(req.params.id);
+    if (!db.prepare('SELECT 1 FROM exams WHERE id = ?').get(id)) throw notFound('آزمون یافت نشد');
+    if (db.prepare("SELECT 1 FROM exams WHERE id = ? AND status = 'archived'").get(id)) {
+      throw conflict('archived', 'آزمون بایگانی‌شده قابل تغییر نیست');
+    }
+    if (!hasEnglish(db, id)) throw conflict('not_english_exam', 'فایل صوتی فقط برای آزمونِ زبان انگلیسی است');
+    const info = classifyAudioUrl(req.body && req.body.url);
+    if (!info) throw badRequest('نشانی اینترنتی معتبر نیست (باید با http یا https آغاز شود)');
+
+    const old = db.prepare('SELECT storage_name FROM exam_audio_files WHERE exam_id = ?').get(id);
+    db.prepare(`INSERT INTO exam_audio_files (exam_id, audio_url, uploaded_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(exam_id) DO UPDATE SET
+                  audio_url = excluded.audio_url,
+                  original_name = NULL, mime_type = NULL, size_bytes = NULL,
+                  sha256 = NULL, storage_name = NULL, uploaded_at = excluded.uploaded_at`)
+      .run(id, info.url, new Date().toISOString());
+    if (old && old.storage_name) { try { storage.removePrivate(config.dataDir, old.storage_name); } catch (_) {} }
+    recordAudit(db, { actor: 'admin', action: 'listening_audio.linked', entityType: 'exam', entityId: id, details: { url: info.url, host: info.host } });
+    res.json({ ok: true, audioUrl: info.url, kind: info.kind, host: info.host });
+  }));
+
   app.get('/api/admin/exams/:id/audio', adminOnly, safeRoute((req, res) => {
     const id = idParam(req.params.id);
     const f = db.prepare('SELECT * FROM exam_audio_files WHERE exam_id = ?').get(id);
     if (!f) throw notFound('فایل صوتی یافت نشد');
+    if (f.audio_url && !f.storage_name) return res.json({ url: f.audio_url, kind: 'link' });
     sendPrivate(res, config, f, { inline: true });
   }));
 
@@ -271,6 +300,10 @@ function mountExamRoutes(app, { db, config, log = console, triggerOutbox = () =>
     if (new Date() < new Date(exam.starts_at)) throw conflict('not_started', 'آزمون هنوز شروع نشده است');
     const f = db.prepare('SELECT * FROM exam_audio_files WHERE exam_id = ?').get(id);
     if (!f) throw notFound('فایل صوتی برای این آزمون وجود ندارد');
+    if (f.audio_url && !f.storage_name) {
+      const info = classifyAudioUrl(f.audio_url) || { kind: 'page', url: f.audio_url };
+      return res.json({ url: info.url, kind: info.kind, source: 'link' });
+    }
     sendPrivate(res, config, f, { inline: true });
   }));
 
@@ -477,6 +510,7 @@ function mountExamRoutes(app, { db, config, log = console, triggerOutbox = () =>
           // پایانِ «مدتِ آزمون» (نه مهلتِ ارسال) — شمارش معکوسِ صفحه‌ی آزمون
           allowedUntil: exams.allowedUntil(r),
           hasAudio: Boolean(db.prepare('SELECT 1 FROM exam_audio_files WHERE exam_id = ?').get(r.id)),
+          audioUrl: (db.prepare('SELECT audio_url FROM exam_audio_files WHERE exam_id = ?').get(r.id) || {}).audio_url || null,
         })),
     });
   });

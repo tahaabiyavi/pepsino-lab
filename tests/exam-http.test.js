@@ -756,6 +756,7 @@ test('دانش‌آموز در فهرستش allowedUntil و hasAudio را می�
   const admin = await adminCookie(s);
   const id = makeOpenExam(s.db, { title: 'آزمون انگلیسی', subjectCode: 'en', subjectLabel: 'زبان انگلیسی', durationMinutes: 90 });
   const up = await req(s, 'POST', `/api/admin/exams/${id}/audio`, { cookie: admin, form: form(MP3(), 'l.mp3', 'audio/mpeg') });
+
   assert.equal(up.status, 201, JSON.stringify(up.data));
 
   addStudent(s.db, 'stu_l');
@@ -772,5 +773,62 @@ test('دانش‌آموز در فهرستش allowedUntil و hasAudio را می�
   const raw = await fetch(`${s.base}/api/student/exams/${id}/audio`, { headers: { cookie } });
   assert.equal(raw.status, 200);
   assert.ok(Buffer.from(await raw.arrayBuffer()).equals(MP3()));
+  await s.close();
+});
+test('ادمین می‌تواند به‌جای بارگذاری، لینکِ صوتی ثبت کند', async () => {
+  const s = await start();
+  const admin = await adminCookie(s);
+  const id = makeOpenExam(s.db, { title: 'آزمون انگلیسی', subjectCode: 'en', subjectLabel: 'زبان انگلیسی' });
+
+  // لینکِ مستقیم
+  let r = await req(s, 'PUT', `/api/admin/exams/${id}/audio-url`, { cookie: admin, json: { url: 'https://host.test/a/listening.mp3' } });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.kind, 'direct');
+
+  let d = await req(s, 'GET', `/api/admin/exams/${id}`, { cookie: admin });
+  assert.equal(d.data.audioUrl, 'https://host.test/a/listening.mp3');
+  assert.equal(d.data.audioKind, 'direct');
+
+  // لینکِ یوتیوب به embed تبدیل می‌شود
+  r = await req(s, 'PUT', `/api/admin/exams/${id}/audio-url`, { cookie: admin, json: { url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' } });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.kind, 'embed');
+  assert.equal(r.data.audioUrl, 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ');
+
+  // نشانیِ نامعتبر پذیرفته نمی‌شود
+  for (const bad of ['javascript:alert(1)', 'ftp://x.test/a.mp3', 'نه یک لینک', '']) {
+    const bad1 = await req(s, 'PUT', `/api/admin/exams/${id}/audio-url`, { cookie: admin, json: { url: bad } });
+    assert.equal(bad1.status, 400, `باید رد می‌شد: ${bad}`);
+  }
+  // لینکِ پیشین دست‌نخورده مانده است
+  d = await req(s, 'GET', `/api/admin/exams/${id}`, { cookie: admin });
+  assert.equal(d.data.audioUrl, 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ');
+  await s.close();
+});
+
+test('لینکِ صوتی هم فقط برای آزمونِ انگلیسی است و دانش‌آموز آن را می‌بیند', async () => {
+  const s = await start();
+  const admin = await adminCookie(s);
+  const bioId = makeOpenExam(s.db, { title: 'آزمون زیست', subjectCode: 'bio', subjectLabel: 'زیست‌شناسی' });
+  let r = await req(s, 'PUT', `/api/admin/exams/${bioId}/audio-url`, { cookie: admin, json: { url: 'https://host.test/a.mp3' } });
+  assert.equal(r.status, 409);
+  assert.equal(r.data.error.code, 'not_english_exam');
+
+  const id = makeOpenExam(s.db, { title: 'آزمون انگلیسی', subjectCode: 'en', subjectLabel: 'زبان انگلیسی', durationMinutes: 90 });
+  await req(s, 'PUT', `/api/admin/exams/${id}/audio-url`, { cookie: admin, json: { url: 'https://host.test/sound.mp3' } });
+
+  addStudent(s.db, 'stu_l');
+  const { cookie } = await login(s, 'stu_l', 'StudentPass1');
+  const list = await req(s, 'GET', '/api/student/exams', { cookie });
+  const row = list.data.exams.find((e) => e.id === id);
+  assert.ok(row, 'آزمون در فهرست است');
+  assert.equal(row.hasAudio, true);
+  assert.equal(row.audioUrl, 'https://host.test/sound.mp3');
+
+  const info = await req(s, 'GET', `/api/student/exams/${id}/audio`, { cookie });
+  assert.equal(info.status, 200);
+  assert.equal(info.data.source, 'link');
+  assert.equal(info.data.kind, 'direct');
+  assert.equal(info.data.url, 'https://host.test/sound.mp3');
   await s.close();
 });
